@@ -1,0 +1,321 @@
+syntax = "v1"
+import "./common.api"
+
+// ==================== 知识库相关 ====================
+type (
+    KnowledgeBaseModelIdsInfo {
+        ModelId uint64 `json:"model_id"` // user_api表的id
+        ModelName string `json:"model_name"` // user_api表的 model_name
+        ModelType string  `json:"model_type"` // user_api表的 model_type
+    }
+
+    // 知识库信息
+    KnowledgeBaseInfo {
+        Id          int64  `json:"id"`
+        Name        string `json:"name"`
+        Description string `json:"description"`
+        Status      int64    `json:"status"`      // 0-禁用，1-启用
+        EmbeddingModelId uint64 `json:"embedding_model_id"`
+        ModelIds []KnowledgeBaseModelIdsInfo `json:"model_ids"` // 知识库用到的模型信息, 默认是 {}
+        CreatedAt   string `json:"created_at"`
+        UpdatedAt   string `json:"updated_at"`
+    }
+
+    // 获取知识库列表请求
+    GetKnowledgeBaseListReq {
+        Page     int `form:"page,optional,default=1"`
+        PageSize int `form:"page_size,optional,default=10"`
+        Status   int64 `form:"status,optional"`  // 状态筛选
+    }
+
+    // 获取知识库列表响应
+    GetKnowledgeBaseListResp {
+        Total int64               `json:"total"`
+        List  []KnowledgeBaseInfo `json:"list"`
+    }
+
+    // 创建知识库请求
+    CreateKnowledgeBaseReq {
+        Name        string `json:"name"`                   // 知识库名称
+        Description string `json:"description,optional"`   // 知识库描述
+        EmbeddingId uint64 `json:"embedding_id"`           // 【必填】embedding模型id, 对应user_api表的id
+        RerankId    uint64 `json:"rerank_id,optional"`     // 选填，没填就为0
+        RewriteId   uint64 `json:"rewrite_id,optional"`    // 选填，没填就为0
+        QaId        uint64 `json:"qa_id,optional"`         // 选填，没填就为0
+        ChatId      uint64 `json:"chat_id,optional"`       // 选填，没填就为0
+    }
+
+    // 创建知识库响应
+    CreateKnowledgeBaseResp {
+        Id int64 `json:"id"`
+    }
+
+    // 删除知识库请求
+    DeleteKnowledgeBaseReq {
+        KnowledgeBaseId int64 `path:"knowledge_base_id"`
+    }
+
+    // 删除知识库响应
+    DeleteKnowledgeBaseResp {
+    }
+
+    // 修改知识库请求
+    UpdateKnowledgeBaseReq {
+        KnowledgeBaseId uint64  `path:"knowledge_base_id"`
+        Name            string `json:"name,optional"`        // 知识库名称
+        Description     string `json:"description,optional"` // 知识库描述
+        Status          int64    `json:"status"`      // 状态:0-禁用,1-启用
+        RerankId    uint64 `json:"rerank_model_id,optional"`
+        RewriteId   uint64 `json:"rewrite_model_id,optional"`
+        QaId        uint64 `json:"qa_model_id,optional"`
+        ChatId      uint64 `json:"chat_model_id,optional"`
+    }
+
+    // 修改知识库响应
+    UpdateKnowledgeBaseResp {
+    }
+)
+
+// ==================== 文档相关 ====================
+type (
+    // 文档信息
+    KnowledgeDocumentInfo {
+        Id              string  `json:"id"`
+        KnowledgeBaseId uint64  `json:"knowledge_base_id"`
+        DocName         string `json:"doc_name"`
+        DocType         string `json:"doc_type"`     // pdf/word/txt
+        DocSize         int64  `json:"doc_size"`     // 字节
+        StoragePath     string `json:"storage_path"`
+        Description     string `json:"description"`
+        Status          string `json:"status"`       // 文档状态, disable-禁用, pending-待处理,indexing-索引中 ,enable-可用, fail-处理失败
+        ChunkCount      int64    `json:"chunk_count"`  // 分片数量
+        ErrMsg          string `json:"err_msg"`      // 失败原因
+        ParserConfig    SegmentationSettings `json:"parser_config"`
+        CreatedAt       string `json:"created_at"`
+        UpdatedAt       string `json:"updated_at"`
+    }
+
+    // 获取文档列表请求
+    GetKnowledgeDocumentListReq {
+        KnowledgeBaseId uint64 `path:"knowledge_base_id"`
+        Page            int   `form:"page,optional,default=1"`
+        PageSize        int   `form:"page_size,optional,default=10"`
+        Status          int   `form:"status,optional"`
+    }
+
+    // 获取文档列表响应
+    GetKnowledgeDocumentListResp {
+        Total int64                   `json:"total"`
+        List  []KnowledgeDocumentInfo `json:"list"`
+    }
+
+    // 上传文件请求 (multipart/form-data)
+    // 必须在form中传递 file 字段，支持 pdf/txt/docx
+    UploadFileReq {
+        KnowledgeBaseId uint64  `path:"knowledge_base_id"`     // 上传到哪个知识库
+        // file: 文件(必传)，支持pdf/txt/docx，在handler中通过 r.FormFile("file") 获取
+        Description     string `form:"description,optional"` // 文档描述
+    }
+
+    // 上传文件响应
+    UploadFileResp {
+        Id      int64  `json:"id"`       // 文档ID
+        DocName string `json:"doc_name"` // 文档名称
+        DocType string `json:"doc_type"` // 文档类型
+        DocSize int64  `json:"doc_size"` // 文档大小
+    }
+
+    // 上传多个文件
+    UploadMultiFileReq {
+        KnowledgeBaseId uint64  `path:"knowledge_base_id"`     // 上传到哪个知识库
+        Description     string `form:"description,optional"` // 文档描述
+    }
+    // 上传多个文件响应
+    UploadMultiFileResp {
+        FileIds []string `json:"file_ids"` // 上传的文件ID列表
+    }
+
+
+    // 删除文档请求
+    DeleteKnowledgeDocumentReq {
+        KnowledgeBaseId uint64 `path:"knowledge_base_id"`
+        DocumentId      string `path:"document_id"`
+    }
+
+    // 删除文档响应
+    DeleteKnowledgeDocumentResp {
+
+    }
+    // 删除所有文档
+    DeleteAllDocumentReq {
+        KnowledgeBaseId uint64 `path:"knowledge_base_id"`
+    }
+    // 删除所有文档
+    DeleteAllDocumentResp {
+
+    }
+)
+
+// ==================== 分片相关 ====================
+type (
+    // 分片信息
+    KnowledgeDocumentChunkInfo {
+        Id                  string  `json:"id"`
+        KnowledgeBaseId     uint64  `json:"knowledge_base_id"`
+        KnowledgeDocumentId string  `json:"knowledge_document_id"`
+        ChunkText           string `json:"chunk_text"`
+        ChunkSize           int    `json:"chunk_size"`
+        Metadata            map[string]interface{} `json:"metadata"`
+        Status              int    `json:"status"`
+        CreatedAt           string `json:"created_at"`
+        UpdatedAt           string `json:"updated_at"`
+    }
+
+    // 获取分片列表请求
+    GetKnowledgeDocumentChunksReq {
+        KnowledgeBaseId uint64 `path:"knowledge_base_id"`
+        DocumentId      string `path:"document_id"`
+        Page            int   `form:"page,optional,default=1"`
+        PageSize        int   `form:"page_size,optional,default=20"`
+    }
+
+    // 获取分片列表响应
+    GetKnowledgeDocumentChunksResp {
+        Total int64                        `json:"total"`
+        List  []KnowledgeDocumentChunkInfo `json:"list"`
+    }
+
+
+
+    // 文本预处理规则
+    SegmentationPreCleanRule{
+        CleanWhitespace bool `json:"clean_whitespace"` // 替换掉连续的空格、换行符和制表符
+        RemoveUrlsEmails bool `json:"remove_urls_emails"` // 删除所有URL和电子邮件地址
+    }
+
+    // 分段设置
+    SegmentationSettings {
+
+        Separators []string `json:"separators"` // 分割符
+        MaxChunkLength int `json:"max_chunk_length"` // 分段最大长度(单位characters)
+        ChunkOverlap int `json:"chunk_overlap"` // 分段重叠长度(单位characters)
+        // 文本预处理规则
+        PreCleanRule SegmentationPreCleanRule `json:"pre_clean_rule"`
+        // 是否开启QA生成, 默认为false
+        enableQaGeneration bool `json:"enable_qa_generation,default=false"`
+    }
+
+
+    PreviewChunk {
+        Index string `json:"index"` // 分块序号 Chunk-1
+        Content string `json:"content"` // 分块内容
+        Length int `json:"length"` // 字符数,UI用于展示 "4 characters"
+    }
+
+    PreviewChunkReq {
+        DocId string `json:"doc_id"`
+        Settings SegmentationSettings `json:"settings"`
+    }
+
+    PreviewChunkResp {
+        DocId string `json:"doc_id"`
+        DocName string `json:"doc_name"`
+        TotalChunks int `json:"total_chunks"` // 具体的预览块列表(5-10个块)
+        Chunks []PreviewChunk `json:"chunks"`
+        ErrorMsg string `json:"error_msg"` // 如果解析失败, 返回该错误信息
+    }
+
+    GetKnowledgeBaseInfoReq {
+        KnowledgeBaseId int64 `path:"knowledge_base_id"`
+    }
+
+
+    SaveChunkSettingsReq {
+        KnowledgeBaseId uint64 `path:"knowledge_base_id"`
+        FileIds []string `json:"file_ids"`
+        Settings SegmentationSettings `json:"settings"`
+    }
+
+    SaveChunkSettingsResp {
+
+    }
+
+    GetDocByDocIdReq {
+     KnowledgeBaseId uint64 `path:"knowledge_base_id"`
+    DocId string `path:"doc_id"`
+    }
+
+
+)
+
+@server (
+	jwt: Auth
+	tags: "知识库相关操作"
+	prefix : /v1
+	group : knowledge
+)
+service rag {
+	@doc "获取知识库列表"
+	@handler getKnowledgeBaseList
+	get /knowledge/list (GetKnowledgeBaseListReq) returns (GetKnowledgeBaseListResp);
+
+	@doc "创建知识库"
+	@handler createKnowledgeBase
+	post /knowledge (CreateKnowledgeBaseReq) returns (CreateKnowledgeBaseResp);
+
+	@doc "删除知识库"
+	@handler deleteKnowledgeBase
+	delete /knowledge/:knowledge_base_id (DeleteKnowledgeBaseReq) returns (DeleteKnowledgeBaseResp);
+
+    @doc "获取知识库详情"
+    @handler getKnowledgeBaseInfo
+    get /knowledge/:knowledge_base_id (GetKnowledgeBaseInfoReq) returns (KnowledgeBaseInfo);
+
+
+	@doc "修改知识库(描述信息、启用或禁用状态、知识库名称）"
+	@handler updateKnowledgeBase
+	put /knowledge/:knowledge_base_id (UpdateKnowledgeBaseReq) returns (UpdateKnowledgeBaseResp);
+
+
+//	==============================================================================
+
+
+	@doc "根据知识库id,获取知识库的文档列表"
+	@handler getKnowledgeDocumentList
+	get /knowledge/:knowledge_base_id/list (GetKnowledgeDocumentListReq) returns (GetKnowledgeDocumentListResp);
+
+	@doc "上传 pdf/txt/docx 文件到指定知识库，使用 multipart/form-data，文件字段名: file"
+	@handler uploadFile
+	post /knowledge/:knowledge_base_id/upload (UploadFileReq) returns (UploadFileResp);
+
+
+    @doc "上传多个文件到指定知识库 ，文件字段名: files"
+    @handler uploadMultiFile
+    post /knowledge/:knowledge_base_id/uploadmulti (UploadMultiFileReq) returns (UploadMultiFileResp);
+
+
+	@doc "获取指定知识库、指定文档的所有分片"
+	@handler getKnowledgeDocumentChunks
+	get /knowledge/:knowledge_base_id/:document_id/chunks (GetKnowledgeDocumentChunksReq) returns (GetKnowledgeDocumentChunksResp);
+
+
+
+    @doc "查看分片效果"
+    @handler previewChunk
+    post /knowledge/:knowledge_base_id/document/preview (PreviewChunkReq) returns (PreviewChunkResp);
+
+
+    @doc "保存分片配置"
+    @handler saveChunkSettings
+    post /knowledge/:knowledge_base_id/document/chunk/save (SaveChunkSettingsReq) returns (SaveChunkSettingsResp);
+
+
+    @doc "删除知识库的所有文档(状态不是indexing的都删掉）"
+    @handler deleteAllDocs
+    delete /knowledge/:knowledge_base_id/all (DeleteAllDocumentReq) returns (DeleteAllDocumentResp);
+
+    @doc "获取指定文档的信息"
+    @handler getDocByDocId
+    get /knowledge/:knowledge_base_id/get_document/:doc_id (GetDocByDocIdReq) returns (KnowledgeDocumentInfo);
+
+}

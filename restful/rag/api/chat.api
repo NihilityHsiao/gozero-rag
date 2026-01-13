@@ -1,0 +1,170 @@
+syntax = "v1"
+import "./common.api"
+
+
+type (
+    ChatRetrieveConfig {
+        Mode string `json:"mode"` // 检索模式：vetcor,fulltext,hybrid
+        TopK int `json:"top_k"`
+        Score float64 `json:"score"` // 阈值
+
+        RerankMode string `json:"rerank_mode"` // hybrid模式下的rerank模式: weighted, rerank
+
+        RerankModelId uint64 `json:"rerank_model_id"` // rerank模式下,需要传递用户的rerank模型id
+
+
+        RerankVectorWeight float64 `json:"rerank_vector_weight"` // weighted模式下, vector的权重 (0-1.0)
+        RerankKeywordWeight float64 `json:"rerank_keyword_weight"`
+    }
+
+
+    ChatReq {
+        ConversationId string `json:"conversation_id"` // 对应 chat_conversation表的id
+        Message string `json:"message"` // 用户输入
+
+        ChatModelId uint64 `json:"chat_model_id"` // 聊天模型的id, 对应user_api表的id
+        Prompt string `json:"prompt"` // 系统提示词
+        Temperature float64 `json:"temperature"` // 随机性
+
+        KnowledgeBaseIds []uint64 `json:"knowledge_base_ids"` // 上下文 知识库id列表
+
+        // 检索设置
+        ChatRetrieveConfig ChatRetrieveConfig `json:"chat_retrieve_config"`
+
+    }
+
+
+    ChatRetrievalChunk {
+        ChunkID string  `json:"chunk_id"` // 片段唯一ID
+        DocID   string  `json:"doc_id"`   // 所属文档ID
+        DocName string  `json:"doc_name"` // 文档名称
+        Content string  `json:"content"`  // 片段内容
+        Score   float64 `json:"score"`    // 匹配分数
+        Source  string  `json:"source"`   // 来源: vector, keyword
+    }
+
+    ChatResp {
+        MsgId string `json:"msg_id"` // 消息id
+
+        // 消息类型: text, citation, finish, error
+        Type string `json:"type"`
+
+        // 1. Text Delta (type=text)
+        Content string `json:"content,optional"`
+
+        // 2. Citation (type=citation)
+        RetrievalDocs []ChatRetrievalChunk `json:"retrieval_docs,optional"`
+
+        // 3. Finish (type=finish)
+        TokenUsage int `json:"token_usage,optional"`
+        FinishReason string `json:"finish_reason,optional"`
+
+        // 4. Error (type=error)
+        ErrorMsg string `json:"error_msg,optional"`
+    }
+
+
+    StartNewChatReq {
+
+    }
+
+    StartNewChatResp {
+        ConversationId string `json:"conversation_id"`
+    }
+
+    // Conversation List
+    GetConversationListReq {
+        Page int `form:"page,default=1"`
+        PageSize int `form:"page_size,default=20"`
+    }
+
+    Conversation {
+        Id string `json:"id"`
+        Title string `json:"title"`
+        MessageCount int `json:"message_count"`
+        UpdatedAt string `json:"updated_at"`
+        CreatedAt string `json:"created_at"`
+    }
+
+    GetConversationListResp {
+        List []Conversation `json:"list"`
+        Total int64 `json:"total"`
+    }
+
+    // Get History Messages
+    GetConversationHistoryReq {
+        ConversationId string `path:"conversation_id"`
+    }
+    
+    // 历史消息使用通用的 ChatMessage 结构 (复用 ChatReq 但增加 Role 等字段，或者定义新的)
+    HistoryMessage {
+        Id string `json:"id"`
+        Role string `json:"role"` // user, assistant
+        Content string `json:"content"` 
+        Type string `json:"type"` // text
+        TokenCount int `json:"token_count"`
+        CreatedAt string `json:"created_at"`
+        // 引用暂时简单处理，复杂结构可以后续扩展
+        RetrievalDocs []ChatRetrievalChunk `json:"retrieval_docs,optional"`
+    }
+
+    GetConversationHistoryResp {
+        List []HistoryMessage `json:"list"`
+    }
+    
+    // Delete Conversation
+    DeleteConversationReq {
+        ConversationId string `path:"conversation_id"`
+    }
+    
+    DeleteConversationResp {}
+
+    // Update Conversation
+    UpdateConversationReq {
+        ConversationId string `path:"conversation_id"`
+        Title string `json:"title"`
+    }
+    UpdateConversationResp {}
+)
+
+
+@server (
+    jwt: Auth
+    tags: "聊天SSE"
+    prefix : /v1
+    group : chat
+    sse: true
+)
+service rag {
+    @doc "sse对话"
+    @handler Chat
+    post /chat/sse (ChatReq) returns (ChatResp)
+}
+
+@server (
+    jwt: Auth
+    tags: "聊天"
+    prefix : /v1
+    group : chat
+)
+service rag {
+    @doc "开启新对话,返回一个 会话id"
+    @handler StartNewChat
+    post /chat/new (StartNewChatReq) returns (StartNewChatResp)
+
+    @doc "获取会话列表"
+    @handler GetConversationList
+    get /chat/conversations (GetConversationListReq) returns (GetConversationListResp)
+
+    @doc "获取会话历史消息"
+    @handler GetConversationHistory
+    get /chat/conversations/:conversation_id/messages (GetConversationHistoryReq) returns (GetConversationHistoryResp)
+
+    @doc "删除会话"
+    @handler DeleteConversation
+    delete /chat/conversations/:conversation_id (DeleteConversationReq) returns (DeleteConversationResp)
+
+    @doc "更新会话标题"
+    @handler UpdateConversation
+    put /chat/conversations/:conversation_id (UpdateConversationReq) returns (UpdateConversationResp)
+}

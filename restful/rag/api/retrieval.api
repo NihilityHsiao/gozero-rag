@@ -1,0 +1,81 @@
+type (
+    HybridWeights {
+        Vector  float64 `json:"vector,optional"`  // 向量检索权重，默认 0.7
+        Keyword float64 `json:"keyword,optional"` // 关键词检索权重，默认 0.3
+    }
+
+    HybridStrategy {
+        Type          string        `json:"type,optional"`            // 混合策略类型: weighted (加权), rerank (重排序)
+        Weights       HybridWeights `json:"weights,optional"`         // 加权模式下的权重配置
+        RerankModelID uint64        `json:"rerank_model_id,optional"` // 重排序模式下的模型ID
+    }
+
+    RetrievalConfig {
+        TopK           int            `json:"top_k,optional,default=10"`           // 返回结果数量
+        ScoreThreshold float64        `json:"score_threshold,optional,default=0.6"` // 相似度阈值
+        HybridStrategy HybridStrategy `json:"hybrid_strategy,optional"`            // 混合检索策略配置
+    }
+
+    RetrieveReq {
+        KnowledgeBaseId uint64          `path:"knowledge_base_id"`
+        Query           string          `json:"query"`                                  // 用户查询语句
+        RetrievalMode   string          `json:"retrieval_mode,optional,default=hybrid"` // 检索模式: vector, fulltext, hybrid
+        RetrievalConfig RetrievalConfig `json:"retrieval_config,optional"`              // 详细检索配置
+        DocIDs          []string        `json:"doc_ids,optional"`                       // 限定检索的文档ID列表
+    }
+
+    RetrievalChunk {
+        ChunkID string  `json:"chunk_id"` // 片段唯一ID
+        DocID   string  `json:"doc_id"`   // 所属文档ID
+        DocName string  `json:"doc_name"` // 文档名称
+        Content string  `json:"content"`  // 片段内容
+        Score   float64 `json:"score"`    // 匹配分数
+        Source  string  `json:"source"`   // 来源: vector, keyword
+    }
+
+    RetrieveResp {
+        KnowledgeBaseID uint64           `json:"knowledge_base_id"`
+        DocIDs          []string         `json:"doc_ids"`      // 涉及的文档ID列表
+        TimeCostMs      int64`json:"time_cost_ms"` // 总检索耗时(ms)
+        Chunks          []RetrievalChunk `json:"chunks"`       // 召回结果列表
+    }
+
+
+    GetRetrieveLogReq {
+        Page      int    `form:"page,optional,default=1"`      // 页码
+        PageSize  int    `form:"page_size,optional,default=10"` // 每页数量
+        KnowledgeBaseId uint64          `path:"knowledge_base_id"`
+    }
+
+
+    RetrieveLog {
+        Id uint64 `json:"id"` // log id
+        KnowledgeBaseId uint64 `json:"knowledge_base_id"`
+        Query string `json:"query"` // 原始查询
+        RetrievalMode string `json:"retrieval_mode"`
+        RetrievalParams RetrievalConfig `json:"retrieval_params"`
+        ChunkCount int `json:"chunk_count"`
+        TimeCostMs int64 `json:"time_cost_ms"`
+        CreatedAt string `json:"created_at"`
+    }
+    GetRetrieveLogResp {
+        Total int64 `json:"total"`
+        Logs []RetrieveLog `json:"logs"`
+    }
+
+)
+
+@server (
+    prefix: /v1
+    group: retrieval
+     jwt: Auth
+)
+service rag {
+    @doc "知识库召回测试"
+    @handler getRetrieval
+    post /retrieval/:knowledge_base_id (RetrieveReq) returns (RetrieveResp)
+
+    @doc "获取知识库召回记录"
+    @handler getRetrievalLog
+    get /retrieval/log/:knowledge_base_id (GetRetrieveLogReq) returns (GetRetrieveLogResp)
+}

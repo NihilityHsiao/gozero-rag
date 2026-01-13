@@ -1,0 +1,47 @@
+Name: rag
+Host: 0.0.0.0
+Port: 8888
+Timeout: 0
+MaxBytes: 104857600 # 请求体大小限制为100MB
+Auth:
+  AccessSecret: "your-secret-key-change-in-production-at-least-32-chars"
+  AccessExpire: 86400  # 24小时，单位秒
+
+Mysql:
+  DataSource: "root:root@tcp(127.0.0.1:13306)/gozero_rag?charset=utf8mb4&parseTime=True&loc=Local"
+
+Cache:
+  - Host: 127.0.0.1:6379
+    Pass: "root"
+    Type: node
+Oss:
+  Type: minio
+  Endpoint: localhost:9000
+  AccessKey: "minioadmin"
+  SecretKey: "minioadmin"
+  UseSSL: false
+  BucketName: "rag-storage"
+# milvus, qdrant, es
+VectorStore:
+  Type: "milvus"
+  Endpoint: "localhost:19530"
+  Username: ""
+  Password: ""
+  Database: ""
+
+DevServer:
+  Enabled: true
+  EnabledMetrics: true
+  Port: 6470
+  MetricsPath: "/metrics"
+# kafka 配置
+#KqPusherConf:
+#  Brokers:
+#    - 127.0.0.1:9092
+#  Topic: prod.interview.evaluation.generate # 面试评价生成的topic
+
+# kafka 配置
+KqPusherConf:
+  Brokers:
+    - localhost:9092
+  Topic: prod.rag.knowledge.document.index # 索引文件

@@ -1,0 +1,307 @@
+services:
+  # 1. MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: app-mysql
+    restart: always
+    ports:
+      - "13306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+#      MYSQL_DATABASE: ${DB_NAME:-interview_agent},${DB_NAME_RAG:-rag}
+      MYSQL_DATABASE: ${DB_NAME_RAG:-gozero_rag}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./script/mysql/user.sql:/docker-entrypoint-initdb.d/user.sql
+      - ./script/mysql/user_api.sql:/docker-entrypoint-initdb.d/user_api.sql
+      - ./script/mysql/knowledge.sql:/docker-entrypoint-initdb.d/knowledge.sql
+      - ./script/mysql/knowledge_retrieval_log.sql:/docker-entrypoint-initdb.d/knowledge_retrieval_log.sql
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # 2. Redis 缓存
+  redis:
+    image: redis:8-alpine
+    container_name: app-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-root}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-root}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+
+  # 3. Etcd服务（Milvus依赖）
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.25
+    container_name: milvus-etcd
+    restart: always
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    volumes:
+      - etcd-data:/etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+      - ETCD_NAME=etcd-milvus
+      - ETCD_DATA_DIR=/etcd
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER=etcd-milvus=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER_TOKEN=milvus-etcd
+      - ETCD_INITIAL_CLUSTER_STATE=new
+    command: etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - app-network
+
+  # 4. MinIO对象存储服务（Milvus依赖）
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: milvus-minio
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/minio_data
+    command: server /minio_data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_REGION_NAME=us-east-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - app-network
+
+  # 5. Milvus向量数据库服务
+  milvus:
+    image: milvusdb/milvus:v2.6.7
+    container_name: milvus-standalone
+    restart: always
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      - ETCD_ENDPOINTS=etcd:2379
+      - MINIO_ADDRESS=minio:9000
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_BUCKET_NAME=milvus-bucket
+      - MINIO_USE_SSL=false
+    command: ["milvus", "run", "standalone"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    networks:
+      - app-network
+
+  # 6. Attu - Milvus管理界面
+  attu:
+    image: zilliz/attu:v2.6
+    platform: linux/amd64
+    container_name: milvus-attu
+    restart: always
+    ports:
+      - "8000:3000"
+    depends_on:
+      milvus:
+        condition: service_healthy
+    environment:
+      - MILVUS_URL=milvus:19530
+    networks:
+      - app-network
+
+  prometheus:
+    image: prom/prometheus:v3.8.0
+    container_name: prometheus
+    environment:
+      - TZ=Asia/Shanghai
+    privileged: true
+    volumes:
+      - ./script/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./script/prometheus/target.json:/etc/prometheus/target.json
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: grafana
+    environment:
+      - TZ=Asia/Shanghai
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    privileged: true
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./script/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
+    restart: always
+  kafka:
+    image: confluentinc/cp-kafka:7.8.3
+    container_name: kafka
+    networks:
+      - app-network
+    ports:
+      # 下面的配置中,设置了9094端口给宿主机访问
+      - "9092:9094"  # 映射 Kafka 的端口
+    environment:
+      KAFKA_KRAFT_MODE: "true"   # 启用 KRaft 模式,不依赖zookeeper
+      CLUSTER_ID: "lucas"  # 集群ID, 每个 Kafka 集群都有一个唯一的 ID，用于标识集群
+      KAFKA_NODE_ID: 1  # 节点ID, 每个 Kafka 集群中的节点都有一个唯一的 ID，用于标识节点
+
+      KAFKA_PROCESS_ROLES: broker,controller  # 该节点的角色, 可以是 broker 或 controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093  # 控制器节点的 ID 和监听地址, 用于控制器节点之间的通信, 可以用逗号分隔指定多个 ,2@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1  # 偏移量主题的副本因子, 用于存储偏移量的主题的副本数量(这里相当于不备份，容错很低)。必须要设置，不然默认值是3，需要3个Kafka节点
+
+
+      # PLAINTEXT: 消费者和生产者连接到这个地址来发送/消费数据
+      # CONTROLLER: 控制器节点之间的通信地址, 用于控制器节点之间的通信
+#      KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9093,PLAINTEXT://0.0.0.0:9092
+      # 声明2个独立监听器：
+      # - PLAINTEXT_INTERNAL：容器间通信（9092端口）
+      # - PLAINTEXT_HOST：宿主机通信（9094端口，映射到宿主机9092）
+      KAFKA_LISTENERS: >-
+        CONTROLLER://0.0.0.0:9093,
+        PLAINTEXT_INTERNAL://0.0.0.0:9092,
+        PLAINTEXT_HOST://0.0.0.0:9094
+#      KAFKA_ADVERTISED_LISTENERS: CONTROLLER://localhost:9093,PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER  # 控制器节点之间的通信监听器名称, 用于控制器节点之间的通信
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL  # 内部broker之间的通信监听器名称, 用于broker之间的通信
+
+      # 广告地址：每个监听器名称唯一，对应不同寻址方式
+      # 容器间用kafka:9092
+      # 宿主机用localhost:9092（映射9094→9092）
+      KAFKA_ADVERTISED_LISTENERS: >-
+        PLAINTEXT_INTERNAL://kafka:9092,    
+        PLAINTEXT_HOST://localhost:9092
+      # 仅保留 PLAINTEXT 监听器
+#      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+#      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # 声明监听器协议映射（名称必须和上面一致）
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >-
+        CONTROLLER:PLAINTEXT,
+        PLAINTEXT_INTERNAL:PLAINTEXT,
+        PLAINTEXT_HOST:PLAINTEXT
+
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"  # 自动创建主题, 用于自动创建主题
+#      KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"  # 禁用 Confluent 支持的指标PLAINTEXT
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      # 健康检查：确保Kafka启动完成后再执行创建Topic脚本
+      test: [ "CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list" ]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    # 初始化容器：专门用于创建Topic（依赖kafka容器健康检查通过）
+  kafka-init:
+    image: confluentinc/cp-kafka:7.8.3
+    container_name: kafka-init
+    networks:
+      - app-network
+    # 依赖kafka容器启动且健康检查通过
+    depends_on:
+      kafka:
+        condition: service_healthy
+    # 执行创建Topic命令（创建a、b、c三个Topic，可自定义分区/副本数）
+    command: >
+      bash -c "
+        echo 'Creating Kafka topics...';
+        kafka-topics --bootstrap-server kafka:9092 --create --topic test.demo --partitions 1 --replication-factor 1 --if-not-exists;
+        kafka-topics --bootstrap-server kafka:9092 --create --topic prod.rag.knowledge.document.index --partitions 1 --replication-factor 1 --if-not-exists;
+        echo 'Topics created successfully!';
+        echo 'Listing all topics:';
+        kafka-topics --bootstrap-server kafka:9092 --list;
+      "
+    # 执行完命令后容器自动退出（无需长期运行）
+    restart: "no"
+#  demo-consumer:
+#    build:
+#      context: .
+#      dockerfile: ./consumer/demo/Dockerfile
+#    container_name: demo-consumer
+#    networks:
+#      - app-network
+#    depends_on:
+#      kafka:
+#        condition: service_healthy
+#    restart: no
+# 数据卷定义
+volumes:
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  etcd-data:
+    driver: local
+  minio-data:
+    driver: local
+  milvus-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  kafka-data:
+    driver: local
+
+# 网络定义
+networks:
+  app-network:
+    driver: bridge
+

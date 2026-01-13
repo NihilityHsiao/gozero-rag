@@ -1,0 +1,19 @@
+syntax = "v1"
+
+import "./api/common.api"
+import "./api/login_and_register.api"
+import "./api/user.api"
+import "./api/knowledge.api"
+import "./api/retrieval.api"
+import "./api/chat.api"
+
+info (
+	title:       "rag api 服务"
+	desc:        "gozero实现的rag服务"
+	author:      "LucasShaw"
+	email:       "xyj.work@139.com"
+	version:     "v1.0.0"
+	host:        "127.0.0.1:8888"
+	wrapCodeMsg: true
+)
+

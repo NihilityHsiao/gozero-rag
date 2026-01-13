@@ -1,0 +1,66 @@
+# my global config
+global:
+  # How frequently to scrape targets by default.
+  scrape_interval: 10s
+  # How long until a scrape request times out.
+  # It cannot be greater than the scrape interval.
+  evaluation_interval: 15s
+  # 在抓取过程中与客户端协商的协议
+  # 支持的值（区分大小写）：PrometheusProto, OpenMetricsText0.0.1,
+  # OpenMetricsText1.0.0, PrometheusText0.0.4, PrometheusText1.0.0
+  # 如果在此处和单独的抓取配置中都未设置，则在该抓取配置中使用的协商顺序
+  # 取决于该抓取配置的 scrape_native_histograms 有效值
+  # 如果 scrape_native_histograms 为 false，顺序是
+  # [ OpenMetricsText1.0.0, OpenMetricsText0.0.1, PrometheusText1.0.0, PrometheusText0.0.4 ]
+  # 如果 scrape_native_histograms 为 true，顺序是
+  # [ PrometheusProto, OpenMetricsText1.0.0, OpenMetricsText0.0.1, PrometheusText1.0.0, PrometheusText0.0.4 ]
+  # 抓取响应体大小限制
+  body_size_limit: 15MB
+  sample_limit: 1500
+  target_limit: 30
+  label_limit: 30
+  label_name_length_limit: 200
+  label_value_length_limit: 200
+  query_log_file: query.log
+  scrape_failure_log_file: fail.log
+  # scrape_timeout is set to the global default (10s).
+
+  external_labels:
+    monitor: codelab
+    foo: bar
+
+scrape_configs:
+  # job_name用来区分不同的监控目标组
+  # 同个job_name下的target共享相同的抓取配置参数
+  - job_name: 'chat-service'
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/target.json  # JSON 文件路径
+
+#alerting:
+#  alertmanagers:
+#    - scheme: https
+#      static_configs:
+#        - targets:
+#            - "1.2.3.4:9093"
+#            - "1.2.3.5:9093"
+#            - "1.2.3.6:9093"
+#
+#storage:
+#  tsdb:
+#    out_of_order_time_window: 30m
+#    retention:
+#      time: 1d
+#      size: 1GB
+#
+#tracing:
+#  endpoint: "localhost:4317"
+#  client_type: "grpc"
+#  headers:
+#    foo: "bar"
+#  timeout: 5s
+#  compression: "gzip"
+#  tls_config:
+#    cert_file: valid_cert_file
+#    key_file: valid_key_file
+#    insecure_skip_verify: true

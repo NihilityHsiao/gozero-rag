@@ -1,0 +1,9 @@
+[
+  {
+    "targets": ["host.docker.internal:6470"],
+    "labels": {
+      "service": "restful-rag-app",
+      "job": "gozero-rag"
+    }
+  }
+]

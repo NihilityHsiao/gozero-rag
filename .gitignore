@@ -1,0 +1,32 @@
+.idea
+.env
+.qoder
+.vscode
+.DS_Store
+/restful/rag/uploads/
+/prompts
+
+# Logs
+fe/logs
+*.log
+fe/npm-debug.log*
+fe/yarn-debug.log*
+fe/yarn-error.log*
+fe/pnpm-debug.log*
+fe/lerna-debug.log*
+
+fe/node_modules
+fe/dist
+fe/dist-ssr
+fe/*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

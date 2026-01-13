@@ -1,0 +1,1311 @@
+{
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "schemes": [
+    "https"
+  ],
+  "swagger": "2.0",
+  "info": {
+    "title": "rag api 服务",
+    "version": "v1.0.0"
+  },
+  "host": "127.0.0.1:8888",
+  "basePath": "/",
+  "paths": {
+    "/v1/knowledge": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "知识库相关操作"
+        ],
+        "summary": "创建知识库",
+        "operationId": "knowledgeCreateKnowledgeBase",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "description": {
+                  "description": "知识库描述",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "知识库名称",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/list": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "知识库相关操作"
+        ],
+        "summary": "获取知识库列表",
+        "operationId": "knowledgeGetKnowledgeBaseList",
+        "parameters": [
+          {
+            "type": "integer",
+            "default": 1,
+            "name": "page",
+            "in": "query",
+            "allowEmptyValue": true
+          },
+          {
+            "type": "integer",
+            "default": 10,
+            "name": "page_size",
+            "in": "query",
+            "allowEmptyValue": true
+          },
+          {
+            "type": "integer",
+            "description": "状态筛选",
+            "name": "status",
+            "in": "query",
+            "allowEmptyValue": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "list": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "status",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "properties": {
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "description": "0-禁用，1-启用",
+                            "type": "integer"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/{knowledge_base_id}": {
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "知识库相关操作"
+        ],
+        "summary": "修改知识库(描述信息、启用或禁用状态、知识库名称）",
+        "operationId": "knowledgeUpdateKnowledgeBase",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "description": "知识库描述",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "知识库名称",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "状态:0-禁用,1-启用",
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object"
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "知识库相关操作"
+        ],
+        "summary": "删除知识库",
+        "operationId": "knowledgeDeleteKnowledgeBase",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object"
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/{knowledge_base_id}/list": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "知识库相关操作"
+        ],
+        "summary": "根据知识库id,获取知识库的文档列表",
+        "operationId": "knowledgeGetKnowledgeDocumentList",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "default": 1,
+            "name": "page",
+            "in": "query",
+            "allowEmptyValue": true
+          },
+          {
+            "type": "integer",
+            "default": 10,
+            "name": "page_size",
+            "in": "query",
+            "allowEmptyValue": true
+          },
+          {
+            "type": "integer",
+            "name": "status",
+            "in": "query",
+            "allowEmptyValue": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "list": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "knowledge_base_id",
+                          "doc_name",
+                          "doc_type",
+                          "doc_size",
+                          "description",
+                          "status",
+                          "chunk_count",
+                          "err_msg",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "properties": {
+                          "chunk_count": {
+                            "description": "分片数量",
+                            "type": "integer"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "doc_name": {
+                            "type": "string"
+                          },
+                          "doc_size": {
+                            "description": "字节",
+                            "type": "integer"
+                          },
+                          "doc_type": {
+                            "description": "pdf/word/txt",
+                            "type": "string"
+                          },
+                          "err_msg": {
+                            "description": "失败原因",
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "knowledge_base_id": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "description": "文档状态, disable-禁用, pending-待处理,indexing-索引中 ,enable-可用, fail-处理失败",
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/{knowledge_base_id}/upload": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "知识库相关操作"
+        ],
+        "summary": "上传 pdf/txt/docx 文件到指定知识库，使用 multipart/form-data，文件字段名: file",
+        "operationId": "knowledgeUploadFile",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "上传到哪个知识库",
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "文档描述",
+            "name": "description",
+            "in": "formData",
+            "allowEmptyValue": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "doc_name": {
+                      "description": "文档名称",
+                      "type": "string"
+                    },
+                    "doc_size": {
+                      "description": "文档大小",
+                      "type": "integer"
+                    },
+                    "doc_type": {
+                      "description": "文档类型",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "文档ID",
+                      "type": "integer"
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/{knowledge_base_id}/uploadmulti": {
+      "post": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "知识库相关操作"
+        ],
+        "summary": "上传 pdf/txt/docx 文件到指定知识库，使用 multipart/form-data，文件字段名: files",
+        "operationId": "knowledgeUploadMultiFile",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "上传到哪个知识库",
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "文档描述",
+            "name": "description",
+            "in": "formData",
+            "allowEmptyValue": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "file_ids": {
+                      "description": "上传的文件ID列表",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/{knowledge_base_id}/{document_id}/chunks": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "知识库相关操作"
+        ],
+        "summary": "获取指定知识库、指定文档的所有分片",
+        "operationId": "knowledgeGetKnowledgeDocumentChunks",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "name": "document_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "default": 1,
+            "name": "page",
+            "in": "query",
+            "allowEmptyValue": true
+          },
+          {
+            "type": "integer",
+            "default": 20,
+            "name": "page_size",
+            "in": "query",
+            "allowEmptyValue": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "list": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "knowledge_base_id",
+                          "knowledge_document_id",
+                          "chunk_text",
+                          "chunk_size",
+                          "status",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "properties": {
+                          "chunk_size": {
+                            "type": "integer"
+                          },
+                          "chunk_text": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "knowledge_base_id": {
+                            "type": "integer"
+                          },
+                          "knowledge_document_id": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "integer"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user/api": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "用户操作"
+        ],
+        "summary": "获取用户模型列表",
+        "operationId": "userGetUserApiList",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "模型类型筛选",
+            "name": "model_type",
+            "in": "query",
+            "allowEmptyValue": true
+          },
+          {
+            "type": "integer",
+            "description": "状态筛选:0-禁用,1-启用",
+            "name": "status",
+            "in": "query",
+            "allowEmptyValue": true
+          },
+          {
+            "type": "integer",
+            "default": 1,
+            "description": "页码",
+            "name": "page",
+            "in": "query",
+            "allowEmptyValue": true
+          },
+          {
+            "type": "integer",
+            "default": 10,
+            "description": "每页数量",
+            "name": "page_size",
+            "in": "query",
+            "allowEmptyValue": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "list": {
+                      "description": "配置列表",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "user_id",
+                          "config_name",
+                          "api_key",
+                          "base_url",
+                          "model_name",
+                          "model_type",
+                          "model_dim",
+                          "max_tokens",
+                          "temperature",
+                          "top_p",
+                          "timeout",
+                          "status",
+                          "is_default",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "properties": {
+                          "api_key": {
+                            "type": "string"
+                          },
+                          "base_url": {
+                            "type": "string"
+                          },
+                          "config_name": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "is_default": {
+                            "type": "integer"
+                          },
+                          "max_tokens": {
+                            "type": "integer"
+                          },
+                          "model_dim": {
+                            "type": "integer"
+                          },
+                          "model_name": {
+                            "type": "string"
+                          },
+                          "model_type": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "integer"
+                          },
+                          "temperature": {
+                            "type": "number"
+                          },
+                          "timeout": {
+                            "type": "integer"
+                          },
+                          "top_p": {
+                            "type": "number"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          },
+                          "user_id": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "description": "总数",
+                      "type": "integer"
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "用户操作"
+        ],
+        "summary": "添加用户API配置",
+        "operationId": "userAddUserApi",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "config_name",
+                "api_key",
+                "model_name",
+                "model_type"
+              ],
+              "properties": {
+                "api_key": {
+                  "description": "API密钥",
+                  "type": "string"
+                },
+                "base_url": {
+                  "description": "基础请求地址",
+                  "type": "string",
+                  "default": "https://api.siliconflow.cn/v1",
+                  "example": "https://api.siliconflow.cn/v1"
+                },
+                "config_name": {
+                  "description": "配置名称",
+                  "type": "string"
+                },
+                "is_default": {
+                  "description": "是否为默认配置",
+                  "type": "integer",
+                  "default": 0,
+                  "example": 0
+                },
+                "max_tokens": {
+                  "description": "单次请求最大tokens数",
+                  "type": "integer",
+                  "default": 2048,
+                  "example": 2048
+                },
+                "model_dim": {
+                  "description": "模型向量维度",
+                  "type": "integer",
+                  "default": 768,
+                  "example": 768
+                },
+                "model_name": {
+                  "description": "模型名称",
+                  "type": "string"
+                },
+                "model_type": {
+                  "description": "模型类型(chat/embedding/qa/rewrite/rerank)",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "配置状态:0-禁用,1-启用",
+                  "type": "integer",
+                  "default": 1,
+                  "example": 1
+                },
+                "temperature": {
+                  "description": "温度系数(0-1)",
+                  "type": "number",
+                  "default": 0.7,
+                  "example": 0.7
+                },
+                "timeout": {
+                  "description": "请求超时时间(秒)",
+                  "type": "integer",
+                  "default": 30,
+                  "example": 30
+                },
+                "top_p": {
+                  "description": "采样Top-P值",
+                  "type": "number",
+                  "default": 0.95,
+                  "example": 0.95
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "新增配置ID",
+                      "type": "integer"
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user/api/{id}": {
+      "delete": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "用户操作"
+        ],
+        "summary": "删除用户API配置",
+        "operationId": "userDeleteUserApi",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "配置ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object"
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user/info": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "用户操作"
+        ],
+        "summary": "获取用户信息",
+        "operationId": "userGetUserInfo",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "user_id": {
+                      "type": "integer"
+                    },
+                    "username": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user/login": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "用户登录和注册"
+        ],
+        "summary": "login",
+        "operationId": "loginLogin",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "username",
+                "password"
+              ],
+              "properties": {
+                "password": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "object",
+                      "required": [
+                        "access_token",
+                        "refresh_token",
+                        "expire_at",
+                        "uid"
+                      ],
+                      "properties": {
+                        "access_token": {
+                          "description": "核心访问令牌, 鉴权用",
+                          "type": "string"
+                        },
+                        "expire_at": {
+                          "description": "access token过期时间，秒级时间戳",
+                          "type": "integer"
+                        },
+                        "refresh_token": {
+                          "description": "刷新令牌, 用于刷新access token",
+                          "type": "string"
+                        },
+                        "uid": {
+                          "description": "用户ID, 用于前端关联用户信息",
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "user": {
+                      "type": "object",
+                      "required": [
+                        "user_id",
+                        "username"
+                      ],
+                      "properties": {
+                        "user_id": {
+                          "type": "integer"
+                        },
+                        "username": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user/register": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "用户登录和注册"
+        ],
+        "summary": "register",
+        "operationId": "loginRegister",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "username",
+                "email",
+                "password",
+                "confirm_password"
+              ],
+              "properties": {
+                "confirm_password": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "password": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "business code",
+                  "type": "integer",
+                  "example": 0
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "object",
+                      "required": [
+                        "access_token",
+                        "refresh_token",
+                        "expire_at",
+                        "uid"
+                      ],
+                      "properties": {
+                        "access_token": {
+                          "description": "核心访问令牌, 鉴权用",
+                          "type": "string"
+                        },
+                        "expire_at": {
+                          "description": "access token过期时间，秒级时间戳",
+                          "type": "integer"
+                        },
+                        "refresh_token": {
+                          "description": "刷新令牌, 用于刷新access token",
+                          "type": "string"
+                        },
+                        "uid": {
+                          "description": "用户ID, 用于前端关联用户信息",
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "user": {
+                      "type": "object",
+                      "required": [
+                        "user_id",
+                        "username"
+                      ],
+                      "properties": {
+                        "user_id": {
+                          "type": "integer"
+                        },
+                        "username": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "msg": {
+                  "description": "business message",
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-date": "2025-12-31 20:29:39",
+  "x-description": "This is a goctl generated swagger file.",
+  "x-github": "https://github.com/zeromicro/go-zero",
+  "x-go-zero-doc": "https://go-zero.dev/",
+  "x-goctl-version": "1.9.2"
+}

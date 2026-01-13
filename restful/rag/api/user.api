@@ -1,0 +1,143 @@
+syntax = "v1"
+import "./common.api"
+type(
+    GetUserInfoReq {
+        Id int64  `json:"id"`
+    }
+
+    // 添加用户API配置请求
+    AddUserApiReq {
+        ConfigName  string  `json:"config_name"`                                               // 配置名称
+        ApiKey      string  `json:"api_key"`                                                   // API密钥
+        BaseUrl     string  `json:"base_url,optional,default=https://api.siliconflow.cn/v1"`   // 基础请求地址
+        ModelName   string  `json:"model_name"`                                                // 模型名称
+        ModelType   string  `json:"model_type"`                                                // 模型类型(chat/embedding/qa/rewrite/rerank)
+        ModelDim    int     `json:"model_dim,optional,default=768"`                            // 模型向量维度
+        MaxTokens   int     `json:"max_tokens,optional,default=2048"`                          // 单次请求最大tokens数
+        Temperature float64 `json:"temperature,optional,default=0.7"`                          // 温度系数(0-1)
+        TopP        float64 `json:"top_p,optional,default=0.95"`                               // 采样Top-P值
+        Timeout     int     `json:"timeout,optional,default=30"`                               // 请求超时时间(秒)
+        Status      int     `json:"status,optional,default=1"`                                 // 配置状态:0-禁用,1-启用
+        IsDefault   int     `json:"is_default,optional,default=0"`                             // 是否为默认配置
+    }
+
+    // 添加用户API配置响应
+    AddUserApiResp {
+        Id int64 `json:"id"` // 新增配置ID
+    }
+
+    // 删除用户API配置请求
+    DeleteUserApiReq {
+        Id int64 `path:"id"` // 配置ID
+    }
+
+    // 删除用户API配置响应
+    DeleteUserApiResp {
+    }
+
+    // 获取用户API配置列表请求
+    GetUserApiListReq {
+        UserId   int64   `path:"user_id"`
+        ModelType string `form:"model_type,optional"`          // 模型类型筛选
+        Status    int    `form:"status,optional"`              // 状态筛选:0-禁用,1-启用
+        Page      int    `form:"page,optional,default=1"`      // 页码
+        PageSize  int    `form:"page_size,optional,default=10"` // 每页数量
+    }
+
+    // 用户API配置信息
+    UserApiInfo {
+        Id          int64   `json:"id"`
+        UserId      int64   `json:"user_id"`
+        ConfigName  string  `json:"config_name"`
+        ApiKey      string  `json:"api_key"`
+        BaseUrl     string  `json:"base_url"`
+        ModelName   string  `json:"model_name"`
+        ModelType   string  `json:"model_type"`
+        ModelDim    int     `json:"model_dim"`
+        MaxTokens   int     `json:"max_tokens"`
+        Temperature float64 `json:"temperature"`
+        TopP        float64 `json:"top_p"`
+        Timeout     int     `json:"timeout"`
+        Status      int     `json:"status"`
+        IsDefault   int     `json:"is_default"`
+        CreatedAt   string  `json:"created_at"`
+        UpdatedAt   string  `json:"updated_at"`
+    }
+
+    // 获取用户API配置列表响应
+    GetUserApiListResp {
+        Total int64         `json:"total"` // 总数
+        List  []UserApiInfo `json:"list"`  // 配置列表
+    }
+
+
+    // 获取用户所有指定的模型
+    GetUserModelReq {
+        UserId int64 `path:"user_id"`
+        // 仅支持 embedding、chat、qa、rewrite、rerank
+        ModelType string `path:"model_type"`
+    }
+
+    GetUserModelResp {
+        Total int64 `json:"total"`
+        List []UserApiInfo `json:"list"`
+    }
+
+
+    // 设置模型为默认模型
+    SetDefaultModelReq{
+        UserId int64 `json:"user_id"`
+        ModelId int64 `json:"model_id"` // 对应user_api表的id
+        ModelType string `json:"model_type"`
+    }
+
+    SetDefaultModelResp {
+
+    }
+
+
+    GetUserApiInfoReq {
+        Id uint64 `path:"id"` // 对应 user_api.id
+    }
+
+)
+
+@server (
+    jwt: Auth
+    tags: "用户操作"
+    prefix : /v1
+    group : user
+)
+service rag {
+    @doc "获取用户信息"
+    @handler getUserInfo
+    get /user/info (GetUserInfoReq) returns (UserInfo);
+
+    @doc "添加用户API配置"
+    @handler addUserApi
+    post /user/api (AddUserApiReq) returns (AddUserApiResp);
+
+    @doc "删除用户API配置"
+    @handler deleteUserApi
+    delete /user/api/:id (DeleteUserApiReq) returns (DeleteUserApiResp);
+
+    @doc "获取用户模型列表"
+    @handler getUserApiList
+    get /user/api/:user_id (GetUserApiListReq) returns (GetUserApiListResp);
+
+
+    @doc "获取指定类型的模型"
+    @handler getUserApiByModelType
+    get /user/api/:user_id/:model_type (GetUserModelReq) returns (GetUserModelResp);
+
+
+    @doc "将模型设为默认模型"
+    @handler setDefaultModel
+    post /user/api/set_default (SetDefaultModelReq) returns (SetDefaultModelResp);
+
+    @doc "获取模型信息"
+    @handler getUserApiInfo
+    get /user/api/detail/:id (GetUserApiInfoReq) returns (UserApiInfo)
+
+
+}

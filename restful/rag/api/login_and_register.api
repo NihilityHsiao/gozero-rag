@@ -1,0 +1,35 @@
+syntax =  "v1"
+import "./common.api"
+
+type (
+	LoginRequest {
+        Username    string `json:"username" example:"lucas"`
+//		Email    string `json:"email" example:"xyj.work@139.com"`
+		Password string `json:"password"`
+	}
+
+	LoginResponse {
+        Token JwtToken `json:"token"`
+		User UserInfo `json:"user"`
+	}
+
+	RegisterRequest {
+        Username    string `json:"username"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		ConfirmPassword string `json:"confirm_password"`
+	}
+)
+
+@server (
+	group : login
+	prefix : /v1
+	tags: "用户登录和注册"
+)
+service rag {
+    @handler login
+	post /user/login (LoginRequest) returns (LoginResponse)
+
+	@handler register
+	post /user/register (RegisterRequest) returns (LoginResponse)
+}
