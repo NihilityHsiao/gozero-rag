@@ -17,7 +17,7 @@ type (
     }
 
     RetrieveReq {
-        KnowledgeBaseId uint64          `path:"knowledge_base_id"`
+        KnowledgeBaseId string          `path:"knowledge_base_id"`
         Query           string          `json:"query"`                                  // 用户查询语句
         RetrievalMode   string          `json:"retrieval_mode,optional,default=hybrid"` // 检索模式: vector, fulltext, hybrid
         RetrievalConfig RetrievalConfig `json:"retrieval_config,optional"`              // 详细检索配置
@@ -34,7 +34,7 @@ type (
     }
 
     RetrieveResp {
-        KnowledgeBaseID uint64           `json:"knowledge_base_id"`
+        KnowledgeBaseID string           `json:"knowledge_base_id"`
         DocIDs          []string         `json:"doc_ids"`      // 涉及的文档ID列表
         TimeCostMs      int64`json:"time_cost_ms"` // 总检索耗时(ms)
         Chunks          []RetrievalChunk `json:"chunks"`       // 召回结果列表
@@ -44,13 +44,13 @@ type (
     GetRetrieveLogReq {
         Page      int    `form:"page,optional,default=1"`      // 页码
         PageSize  int    `form:"page_size,optional,default=10"` // 每页数量
-        KnowledgeBaseId uint64          `path:"knowledge_base_id"`
+        KnowledgeBaseId string          `path:"knowledge_base_id"`
     }
 
 
     RetrieveLog {
         Id uint64 `json:"id"` // log id
-        KnowledgeBaseId uint64 `json:"knowledge_base_id"`
+        KnowledgeBaseId string `json:"knowledge_base_id"`
         Query string `json:"query"` // 原始查询
         RetrievalMode string `json:"retrieval_mode"`
         RetrievalParams RetrievalConfig `json:"retrieval_params"`

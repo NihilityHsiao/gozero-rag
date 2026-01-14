@@ -53,7 +53,7 @@ interface RetrievalSettingsSheetProps {
     onOpenChange: (open: boolean) => void;
     currentConfig: RetrievalSettingsValues;
     onSave: (values: RetrievalSettingsValues) => void;
-    userId: number;
+    userId: string;
 }
 
 export const RetrievalSettingsSheet: React.FC<RetrievalSettingsSheetProps> = ({

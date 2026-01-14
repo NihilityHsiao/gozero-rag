@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type AxiosResponse, type AxiosError } from 'axios';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/useAuthStore';
 
 // Define the standard response structure from backend
 interface ApiResponse<T = any> {
@@ -49,8 +50,7 @@ request.interceptors.response.use(
       switch (status) {
         case 401:
           message = 'Unauthorized. Please login again.';
-          // TODO: Redirect to login
-          // window.location.href = '/login';
+          useAuthStore.getState().logout();
           break;
         case 403:
           message = 'Forbidden.';
@@ -65,9 +65,10 @@ request.interceptors.response.use(
           message = `Error: ${status}`;
       }
     } else if (error.request) {
-        message = 'No response received from server.';
+      message = 'No response received from server.';
+
     } else {
-        message = error.message;
+      message = error.message;
     }
 
     toast.error(message);

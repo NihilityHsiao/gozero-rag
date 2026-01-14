@@ -10,8 +10,9 @@ import (
 
 // CustomClaims 自定义claims，包含用户信息
 type CustomClaims struct {
-	Uid      int64  `json:"uid"`
-	Username string `json:"username"`
+	Uid      string `json:"uid"`       // 用户ID (UUID v7)
+	TenantId string `json:"tenant_id"` // 当前租户ID
+	Nickname string `json:"nickname"`  // 用户昵称
 	jwt.RegisteredClaims
 }
 
@@ -22,13 +23,14 @@ type JwtConfig struct {
 }
 
 // GenerateToken 生成JWT token
-func GenerateToken(cfg JwtConfig, uid int64, username string) (accessToken string, expireAt int64, err error) {
+func GenerateToken(cfg JwtConfig, uid string, tenantId string, nickname string) (accessToken string, expireAt int64, err error) {
 	now := time.Now()
 	expireAt = now.Add(time.Duration(cfg.AccessExpire) * time.Second).Unix()
 
 	claims := CustomClaims{
 		Uid:      uid,
-		Username: username,
+		TenantId: tenantId,
+		Nickname: nickname,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(cfg.AccessExpire) * time.Second)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -76,14 +78,15 @@ func ParseToken(tokenString string, accessSecret string) (*CustomClaims, error) 
 }
 
 // GenerateRefreshToken 生成刷新token（过期时间更长）
-func GenerateRefreshToken(cfg JwtConfig, uid int64, username string) (refreshToken string, err error) {
+func GenerateRefreshToken(cfg JwtConfig, uid string, tenantId string, nickname string) (refreshToken string, err error) {
 	// 刷新token过期时间是access token的7倍（例如7天）
 	refreshExpire := cfg.AccessExpire * 7
 	now := time.Now()
 
 	claims := CustomClaims{
 		Uid:      uid,
-		Username: username,
+		TenantId: tenantId,
+		Nickname: nickname,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(refreshExpire) * time.Second)),
 			IssuedAt:  jwt.NewNumericDate(now),

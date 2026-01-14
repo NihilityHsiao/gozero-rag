@@ -47,7 +47,7 @@ const DocumentDetailPage: React.FC = () => {
         if (!kbId || !docId) return;
         setLoadingDoc(true);
         try {
-            const res = await getDocDetail(parseInt(kbId), docId);
+            const res = await getDocDetail(docId);
             setDoc(res);
         } catch (error) {
             toast.error("加载文档详情失败");
@@ -61,7 +61,7 @@ const DocumentDetailPage: React.FC = () => {
         setLoading(true);
         try {
             const res = await getDocumentChunks({
-                knowledge_base_id: parseInt(kbId),
+                knowledge_base_id: kbId,
                 document_id: docId,
                 page,
                 page_size: 20,

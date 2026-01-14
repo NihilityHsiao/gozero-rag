@@ -4,6 +4,8 @@ import (
 	"context"
 	"gozero-rag/consumer/document_index/internal/config"
 	"gozero-rag/internal/model/knowledge"
+	"gozero-rag/internal/model/knowledge_base"
+	"gozero-rag/internal/model/tenant_llm"
 	"gozero-rag/internal/model/user_api"
 	"gozero-rag/internal/model/vector"
 	"gozero-rag/internal/oss"
@@ -20,13 +22,15 @@ type ServiceContext struct {
 	SqlConn                     sqlx.SqlConn
 	OssClient                   oss.Client
 	VectorClient                vectorstore.Client
-	KnowledgeBaseModel          knowledge.KnowledgeBaseModel
+	KnowledgeBaseModel          knowledge_base.KnowledgeBaseModel
 	KnowledgeDocumentModel      knowledge.KnowledgeDocumentModel
 	KnowledgeDocumentChunkModel knowledge.KnowledgeDocumentChunkModel
 	KnowledgeVectorModel        vector.KnowledgeVectorModel // New
 	UserApiModel                user_api.UserApiModel
 
 	DocProcessService *doc_processor.ProcessorService
+
+	TenantLlmModel tenant_llm.TenantLlmModel
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -58,11 +62,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		SqlConn:                     sqlConn,
 		OssClient:                   ossClient,
 		VectorClient:                vectorClient,
-		KnowledgeBaseModel:          knowledge.NewKnowledgeBaseModel(sqlConn),
+		KnowledgeBaseModel:          knowledge_base.NewKnowledgeBaseModel(sqlConn, c.Cache),
 		KnowledgeDocumentModel:      knowledge.NewKnowledgeDocumentModel(sqlConn),
 		KnowledgeDocumentChunkModel: knowledge.NewKnowledgeDocumentChunkModel(sqlConn),
 		KnowledgeVectorModel:        vector.NewKnowledgeVectorModel(vectorClient), // New
 		UserApiModel:                user_api.NewUserApiModel(sqlConn, c.Cache),
 		DocProcessService:           docProcessService,
+
+		TenantLlmModel: tenant_llm.NewTenantLlmModel(sqlConn, c.Cache),
 	}
 }

@@ -12,13 +12,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Settings2, Play, Loader2 } from 'lucide-react';
+import { useAuthStore } from '@/store/useAuthStore';
 
 // Use same type for simplicity where possible, config lacks query
 type PageConfig = RetrievalSettingsValues;
 
 const RetrievalTestPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
-    const knowledgeBaseId = Number(id);
+    const knowledgeBaseId = id || '';
+    const { userInfo } = useAuthStore();
 
     const [loading, setLoading] = useState(false);
     const [query, setQuery] = useState('');
@@ -76,7 +78,8 @@ const RetrievalTestPage: React.FC = () => {
     const fetchRerankModels = async () => {
         // userId fixed to 1 as per current context
         try {
-            const res = await getUserApiList(1, { model_type: 'rerank' });
+            if (!userInfo?.user_id) return;
+            const res = await getUserApiList(userInfo.user_id, { model_type: 'rerank' });
             if (res.list && res.list.length > 0) {
                 setRerankModels(res.list);
                 // Set default rerank model if not set
@@ -122,7 +125,7 @@ const RetrievalTestPage: React.FC = () => {
                             keyword: config.weight_keyword,
                         } : undefined,
                         // Always pass rerank_model_id if available
-                        rerank_model_id: config.rerank_model_id ? Number(config.rerank_model_id) : undefined
+                        rerank_model_id: config.rerank_model_id || undefined
                     }
                 }
             };
@@ -226,7 +229,7 @@ const RetrievalTestPage: React.FC = () => {
                     onOpenChange={setIsSettingsOpen}
                     currentConfig={config}
                     onSave={setConfig}
-                    userId={1} // TODO use real user id
+                    userId={userInfo?.user_id || ''} // TODO use real user id
                 />
 
                 {/* History Area */}

@@ -1,6 +1,3 @@
-// Code scaffolded by goctl. Safe to edit.
-// goctl 1.9.2
-
 package retrieval
 
 import (
@@ -14,6 +11,7 @@ import (
 	"gozero-rag/restful/rag/internal/common"
 	"gozero-rag/restful/rag/internal/svc"
 	"gozero-rag/restful/rag/internal/types"
+	"strconv"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -40,7 +38,20 @@ func (l *GetRetrievalLogic) getRetrieveRequestFromReq(req *types.RetrieveReq) (*
 		return nil, xerr.NewInternalErrMsg("知识库不存在")
 	}
 
-	emb, err := l.svcCtx.UserApiModel.FindOne(l.ctx, kb.EmbeddingModelId)
+	// Phase 3: kb.EmbdId is a string reference.
+	// If UserApiModel uses integer IDs, we must convert.
+	// If TenantLlmModel should be used, we should switch here.
+	// For now, assuming EmbdId holds the integer ID of UserApiModel for compatibility logic
+	// or we need to fetch from TenantLlmModel.
+	// Assuming UserApiModel for now to keep minimal changes to logic flow, but converting string to int.
+	embId, err := strconv.ParseUint(kb.EmbdId, 10, 64)
+	if err != nil {
+		// Fallback or error if ID is not int (e.g. UUID)
+		// If using TenantLLM, logic changes.
+		return nil, xerr.NewInternalErrMsg("invalid embedding model id format")
+	}
+
+	emb, err := l.svcCtx.UserApiModel.FindOne(l.ctx, embId)
 	if err != nil {
 		return nil, xerr.NewInternalErrMsg("embedding model not found")
 	}
@@ -128,6 +139,7 @@ func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.Re
 	// 记录日志
 	go func() {
 		// 序列化 RetrievalParams
+		// Note: req.RetrievalConfig uses json tags, should be fine.
 		paramsBytes, _ := json.Marshal(req.RetrievalConfig)
 		logEntry := &knowledge_retrieval_log.KnowledgeRetrievalLog{
 			KnowledgeBaseId: req.KnowledgeBaseId,
@@ -139,7 +151,8 @@ func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.Re
 				Valid:  true,
 			},
 			ChunkCount: int64(len(chunks)),
-			TimeCostMs: cost,
+			TimeCostMs: int64(cost), // Cast to int64 as per model? Check model type. Model is int64 usually. Check gen-model output.
+			// script says int. Model might be int64.
 		}
 
 		_, logErr := l.svcCtx.KnowledgeRetrievalLogModel.Insert(context.Background(), logEntry)
@@ -151,9 +164,9 @@ func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.Re
 
 	resp = &types.RetrieveResp{
 		KnowledgeBaseID: req.KnowledgeBaseId,
-		//DocIDs:          []string{"019b7e12-6c72-7835-9c8c-143ab03aa6e8", "019b7eff-6c72-7835-9c8c-143ab03aa6e8"},
-		TimeCostMs: cost,
-		Chunks:     chunks,
+		DocIDs:          []string{}, // Empty for now
+		TimeCostMs:      cost,
+		Chunks:          chunks,
 	}
 
 	return

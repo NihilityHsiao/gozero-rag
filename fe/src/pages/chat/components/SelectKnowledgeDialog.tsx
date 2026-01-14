@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 interface SelectKnowledgeDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    currentSelection: number[]; // IDs
+    currentSelection: string[]; // IDs
     onConfirm: (selected: KnowledgeBaseInfo[]) => void;
 }
 
@@ -29,7 +29,7 @@ export default function SelectKnowledgeDialog({
 }: SelectKnowledgeDialogProps) {
     const [list, setList] = useState<KnowledgeBaseInfo[]>([]);
     const [loading, setLoading] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [search, setSearch] = useState('');
 
     useEffect(() => {
@@ -51,7 +51,7 @@ export default function SelectKnowledgeDialog({
         }
     };
 
-    const handleToggle = (id: number) => {
+    const handleToggle = (id: string) => {
         setSelectedIds(prev => {
             if (prev.includes(id)) {
                 return prev.filter(x => x !== id);

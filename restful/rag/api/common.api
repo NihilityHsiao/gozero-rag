@@ -1,15 +1,26 @@
-syntax =  "v1"
+syntax = "v1"
 
 type (
+    // 用户基本信息
     UserInfo {
-        UserId int64 `json:"user_id"`
-        Username string `json:"username"`
+        UserId   string `json:"user_id"`              // UUID v7
+        Nickname string `json:"nickname"`
+        Email    string `json:"email"`
+        Avatar   string `json:"avatar,optional"`
+        Language string `json:"language,optional"`
     }
 
+    // JWT Token
     JwtToken {
-        AccessToken string `json:"access_token"` // 核心访问令牌, 鉴权用
-        RefreshToken string `json:"refresh_token"` // 刷新令牌, 用于刷新access token
-        ExpireAt int64 `json:"expire_at"` // access token过期时间，秒级时间戳
-        Uid int64 `json:"uid"` // 用户ID, 用于前端关联用户信息
+        AccessToken  string `json:"access_token"`     // 核心访问令牌, 鉴权用
+        RefreshToken string `json:"refresh_token"`    // 刷新令牌, 用于刷新access token
+        ExpireAt     int64  `json:"expire_at"`        // access token过期时间，秒级时间戳
+    }
+
+    // 租户基本信息
+    TenantInfo {
+        TenantId string `json:"tenant_id"`
+        Name     string `json:"name"`
+        Role     string `json:"role"`                 // owner|admin|member
     }
 )

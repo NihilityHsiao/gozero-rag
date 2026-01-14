@@ -13,17 +13,27 @@ export const getKnowledgeList = (params: GetKnowledgeBaseListReq) => {
 };
 
 export const createKnowledgeBase = (data: CreateKnowledgeBaseReq) => {
-  return request.post<any, CreateKnowledgeBaseResp>('/knowledge', data);
+  return request.post<any, CreateKnowledgeBaseResp>('/knowledge/create', data);
 };
 
-export const getKnowledgeDetail = (id: number) => {
+export const getKnowledgeDetail = (id: string) => {
   return request.get<any, KnowledgeBaseInfo>(`/knowledge/${id}`);
 };
 
-export const deleteKnowledgeBase = (id: number) => {
+export const deleteKnowledgeBase = (id: string) => {
   return request.delete<any, void>(`/knowledge/${id}`);
 };
 
-export const updateKnowledgeBase = (id: number, data: UpdateKnowledgeBaseReq) => {
+export const updateKnowledgeBase = (id: string, data: UpdateKnowledgeBaseReq) => {
   return request.put<any, void>(`/knowledge/${id}`, data);
+};
+
+// 获取租户 LLM 列表（用于创建知识库时选择 Embedding 模型）
+export const getTenantLlmList = (params?: { model_type?: string }) => {
+  return request.get<any, { list: any[] }>('/tenant/llm', { params });
+};
+
+// 更新知识库权限
+export const updateKnowledgeBasePermission = (id: string, permission: string) => {
+  return request.patch<any, void>(`/knowledge/${id}/permission`, { permission });
 };

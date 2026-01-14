@@ -49,8 +49,9 @@ export default function StepUpload({ onNext, setFiles }: StepUploadProps) {
         setUploading(true);
         setProgress(0);
         try {
-            const resp = await uploadFiles(Number(knowledgeId), files, (p) => setProgress(p));
+            const resp: any = await uploadFiles(knowledgeId, files, (p: number) => setProgress(p));
 
+            // axios 拦截器已经解包了 data，所以直接访问 resp.file_ids
             if (!resp || !resp.file_ids) {
                 throw new Error("服务器响应无效");
             }
@@ -59,13 +60,13 @@ export default function StepUpload({ onNext, setFiles }: StepUploadProps) {
             setUploadedIds(ids);
 
             // Map IDs to file names (assuming order is preserved)
-            const uploadedFiles = ids.map((id, index) => ({
+            const uploadedFiles = ids.map((id: string, index: number) => ({
                 id,
                 name: files[index]?.name || `Document ${index + 1}`
             }));
             setFiles(uploadedFiles);
 
-            toast.success('文件上传成功');
+            toast.success('文件上传成功，已加入解析队列');
         } catch (error) {
             console.error(error);
             toast.error('文件上传失败');
@@ -90,6 +91,7 @@ export default function StepUpload({ onNext, setFiles }: StepUploadProps) {
                     </div>
                     <p className="font-medium text-gray-900">点击 or 拖拽文件上传</p>
                     <p className="text-xs text-gray-400">PDF, MD, TXT, DOCX (Max 15MB)</p>
+                    <p className="text-xs text-gray-400 mt-1">新文件将使用当前知识库的默认解析规则进行处理</p>
                 </div>
             </div>
 

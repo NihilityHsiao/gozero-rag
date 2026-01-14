@@ -18,7 +18,7 @@ export default function UserInfo() {
                 <CardContent className="space-y-4">
                     <div className="grid gap-2">
                         <Label>用户名</Label>
-                        <Input value={userInfo?.username || ''} disabled readOnly />
+                        <Input value={userInfo?.nickname || ''} disabled readOnly />
                     </div>
                     {/* Add more fields here */}
                 </CardContent>

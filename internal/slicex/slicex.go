@@ -8,7 +8,7 @@ package slicex
 //	newChunks := slicex.Into(chunks, func(chunk *schema.Document) *knowledge.KnowledgeDocumentChunk {
 //	    metaBytes, _ := json.Marshal(chunk.MetaData)
 //	    return &knowledge.KnowledgeDocumentChunk{
-//	        Id:        uuid.NewString(),
+//	        Id:        uuid.Must(uuid.NewV7()).String(),
 //	        ChunkText: chunk.Content,
 //	        Metadata:  string(metaBytes),
 //	    }

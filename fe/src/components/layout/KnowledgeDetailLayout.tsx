@@ -14,7 +14,7 @@ export default function KnowledgeDetailLayout() {
   // Find current knowledge base info from store or fetch it (simplified here)
   useEffect(() => {
     if (id && list.length > 0) {
-      const found = list.find(k => k.id === Number(id));
+      const found = list.find(k => k.id === id);
       if (found) setCurrentKnowledge(found);
     }
   }, [id, list]);

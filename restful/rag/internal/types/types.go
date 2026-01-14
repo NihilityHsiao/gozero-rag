@@ -3,6 +3,19 @@
 
 package types
 
+type AddTenantLlmReq struct {
+	LlmFactory string        `json:"llm_factory"` // 厂商名称
+	ApiKey     string        `json:"api_key"`     // 共享的API密钥
+	ApiBase    string        `json:"api_base"`    // 共享的API基础地址
+	Models     []ModelConfig `json:"models"`      // 要添加的模型列表
+}
+
+type AddTenantLlmResp struct {
+	SuccessCount int64    `json:"success_count"` // 成功添加数量
+	FailedCount  int64    `json:"failed_count"`  // 失败数量
+	FailedModels []string `json:"failed_models"` // 失败的模型名称
+}
+
 type AddUserApiReq struct {
 	ConfigName  string  `json:"config_name"`                                             // 配置名称
 	ApiKey      string  `json:"api_key"`                                                 // API密钥
@@ -22,13 +35,21 @@ type AddUserApiResp struct {
 	Id int64 `json:"id"` // 新增配置ID
 }
 
+type BatchParseDocumentReq struct {
+	KnowledgeBaseId string   `json:"knowledge_base_id"` // 知识库ID
+	DocumentIds     []string `json:"document_ids"`      // 文档ID列表
+}
+
+type BatchParseDocumentResp struct {
+}
+
 type ChatReq struct {
 	ConversationId     string             `json:"conversation_id"`    // 对应 chat_conversation表的id
 	Message            string             `json:"message"`            // 用户输入
 	ChatModelId        uint64             `json:"chat_model_id"`      // 聊天模型的id, 对应user_api表的id
 	Prompt             string             `json:"prompt"`             // 系统提示词
 	Temperature        float64            `json:"temperature"`        // 随机性
-	KnowledgeBaseIds   []uint64           `json:"knowledge_base_ids"` // 上下文 知识库id列表
+	KnowledgeBaseIds   []string           `json:"knowledge_base_ids"` // 上下文 知识库id列表
 	ChatRetrieveConfig ChatRetrieveConfig `json:"chat_retrieve_config"`
 }
 
@@ -69,25 +90,28 @@ type Conversation struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+type CreateInviteReq struct {
+	Email string `json:"email"` // 被邀请人邮箱
+}
+
+type CreateInviteResp struct {
+	InviteCode string `json:"invite_code"` // 邀请码
+	InviteLink string `json:"invite_link"` // 邀请链接
+}
+
 type CreateKnowledgeBaseReq struct {
-	Name        string `json:"name"`                 // 知识库名称
-	Description string `json:"description,optional"` // 知识库描述
-	EmbeddingId uint64 `json:"embedding_id"`         // 【必填】embedding模型id, 对应user_api表的id
-	RerankId    uint64 `json:"rerank_id,optional"`   // 选填，没填就为0
-	RewriteId   uint64 `json:"rewrite_id,optional"`  // 选填，没填就为0
-	QaId        uint64 `json:"qa_id,optional"`       // 选填，没填就为0
-	ChatId      uint64 `json:"chat_id,optional"`     // 选填，没填就为0
+	Name                   string  `json:"name"`
+	Avatar                 string  `json:"avatar,optional"`
+	Language               string  `json:"language,optional,default=Chinese"`
+	Description            string  `json:"description,optional"`
+	EmbdId                 string  `json:"embd_id"`
+	Permission             string  `json:"permission,optional,default=me"`
+	SimilarityThreshold    float64 `json:"similarity_threshold,optional,default=0.3"`
+	VectorSimilarityWeight float64 `json:"vector_similarity_weight,optional,default=0.3"`
 }
 
 type CreateKnowledgeBaseResp struct {
-	Id int64 `json:"id"`
-}
-
-type DeleteAllDocumentReq struct {
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`
-}
-
-type DeleteAllDocumentResp struct {
+	KnowledgeBaseInfo
 }
 
 type DeleteConversationReq struct {
@@ -98,18 +122,21 @@ type DeleteConversationResp struct {
 }
 
 type DeleteKnowledgeBaseReq struct {
-	KnowledgeBaseId int64 `path:"knowledge_base_id"`
+	Id string `path:"id"`
 }
 
 type DeleteKnowledgeBaseResp struct {
 }
 
 type DeleteKnowledgeDocumentReq struct {
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`
-	DocumentId      string `path:"document_id"`
+	Id string `path:"id"`
 }
 
 type DeleteKnowledgeDocumentResp struct {
+}
+
+type DeleteTenantLlmReq struct {
+	Id int64 `path:"id"`
 }
 
 type DeleteUserApiReq struct {
@@ -137,54 +164,26 @@ type GetConversationListResp struct {
 	Total int64          `json:"total"`
 }
 
-type GetDocByDocIdReq struct {
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`
-	DocId           string `path:"doc_id"`
+type GetKnowledgeBaseReq struct {
+	Id string `path:"id"`
 }
 
-type GetKnowledgeBaseInfoReq struct {
-	KnowledgeBaseId int64 `path:"knowledge_base_id"`
+type GetKnowledgeBaseResp struct {
+	KnowledgeBaseInfo
 }
 
-type GetKnowledgeBaseListReq struct {
-	Page     int   `form:"page,optional,default=1"`
-	PageSize int   `form:"page_size,optional,default=10"`
-	Status   int64 `form:"status,optional"` // 状态筛选
+type GetKnowledgeDocumentReq struct {
+	Id string `path:"id"`
 }
 
-type GetKnowledgeBaseListResp struct {
-	Total int64               `json:"total"`
-	List  []KnowledgeBaseInfo `json:"list"`
-}
-
-type GetKnowledgeDocumentChunksReq struct {
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`
-	DocumentId      string `path:"document_id"`
-	Page            int    `form:"page,optional,default=1"`
-	PageSize        int    `form:"page_size,optional,default=20"`
-}
-
-type GetKnowledgeDocumentChunksResp struct {
-	Total int64                        `json:"total"`
-	List  []KnowledgeDocumentChunkInfo `json:"list"`
-}
-
-type GetKnowledgeDocumentListReq struct {
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`
-	Page            int    `form:"page,optional,default=1"`
-	PageSize        int    `form:"page_size,optional,default=10"`
-	Status          int    `form:"status,optional"`
-}
-
-type GetKnowledgeDocumentListResp struct {
-	Total int64                   `json:"total"`
-	List  []KnowledgeDocumentInfo `json:"list"`
+type GetKnowledgeDocumentResp struct {
+	KnowledgeDocumentInfo
 }
 
 type GetRetrieveLogReq struct {
 	Page            int    `form:"page,optional,default=1"`       // 页码
 	PageSize        int    `form:"page_size,optional,default=10"` // 每页数量
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`
+	KnowledgeBaseId string `path:"knowledge_base_id"`
 }
 
 type GetRetrieveLogResp struct {
@@ -197,7 +196,7 @@ type GetUserApiInfoReq struct {
 }
 
 type GetUserApiListReq struct {
-	UserId    int64  `path:"user_id"`
+	UserId    string `path:"user_id"`                       // 用户ID (UUID)
 	ModelType string `form:"model_type,optional"`           // 模型类型筛选
 	Status    int    `form:"status,optional"`               // 状态筛选:0-禁用,1-启用
 	Page      int    `form:"page,optional,default=1"`       // 页码
@@ -210,11 +209,11 @@ type GetUserApiListResp struct {
 }
 
 type GetUserInfoReq struct {
-	Id int64 `json:"id"`
+	Id string `json:"id,optional"` // 用户ID (UUID), 可选，不传则查询当前登录用户
 }
 
 type GetUserModelReq struct {
-	UserId    int64  `path:"user_id"`
+	UserId    string `path:"user_id"` // 用户ID (UUID)
 	ModelType string `path:"model_type"`
 }
 
@@ -244,89 +243,154 @@ type HybridWeights struct {
 	Keyword float64 `json:"keyword,optional"` // 关键词检索权重，默认 0.3
 }
 
+type JoinTeamReq struct {
+	InviteCode string `json:"invite_code"` // 邀请码
+}
+
+type JoinTeamResp struct {
+	Success bool `json:"success"`
+}
+
+type JoinedTeam struct {
+	TenantId   string `json:"tenant_id"`
+	TenantName string `json:"tenant_name"`
+	OwnerName  string `json:"owner_name"`
+	Role       string `json:"role"`
+	JoinedTime int64  `json:"joined_time"`
+}
+
 type JwtToken struct {
 	AccessToken  string `json:"access_token"`  // 核心访问令牌, 鉴权用
 	RefreshToken string `json:"refresh_token"` // 刷新令牌, 用于刷新access token
 	ExpireAt     int64  `json:"expire_at"`     // access token过期时间，秒级时间戳
-	Uid          int64  `json:"uid"`           // 用户ID, 用于前端关联用户信息
 }
 
 type KnowledgeBaseInfo struct {
-	Id               int64                       `json:"id"`
-	Name             string                      `json:"name"`
-	Description      string                      `json:"description"`
-	Status           int64                       `json:"status"` // 0-禁用，1-启用
-	EmbeddingModelId uint64                      `json:"embedding_model_id"`
-	ModelIds         []KnowledgeBaseModelIdsInfo `json:"model_ids"` // 知识库用到的模型信息, 默认是 {}
-	CreatedAt        string                      `json:"created_at"`
-	UpdatedAt        string                      `json:"updated_at"`
-}
-
-type KnowledgeBaseModelIdsInfo struct {
-	ModelId   uint64 `json:"model_id"`   // user_api表的id
-	ModelName string `json:"model_name"` // user_api表的 model_name
-	ModelType string `json:"model_type"` // user_api表的 model_type
-}
-
-type KnowledgeDocumentChunkInfo struct {
-	Id                  string                 `json:"id"`
-	KnowledgeBaseId     uint64                 `json:"knowledge_base_id"`
-	KnowledgeDocumentId string                 `json:"knowledge_document_id"`
-	ChunkText           string                 `json:"chunk_text"`
-	ChunkSize           int                    `json:"chunk_size"`
-	Metadata            map[string]interface{} `json:"metadata"`
-	Status              int                    `json:"status"`
-	CreatedAt           string                 `json:"created_at"`
-	UpdatedAt           string                 `json:"updated_at"`
+	Id                     string  `json:"id"`
+	Avatar                 string  `json:"avatar,optional"`
+	TenantId               string  `json:"tenant_id"`
+	Name                   string  `json:"name"`
+	Language               string  `json:"language"`
+	Description            string  `json:"description,optional"`
+	EmbdId                 string  `json:"embd_id"`
+	Permission             string  `json:"permission"`
+	CreatedBy              string  `json:"created_by"`
+	DocNum                 int64   `json:"doc_num"`
+	TokenNum               int64   `json:"token_num"`
+	ChunkNum               int64   `json:"chunk_num"`
+	SimilarityThreshold    float64 `json:"similarity_threshold"`
+	VectorSimilarityWeight float64 `json:"vector_similarity_weight"`
+	Status                 int64   `json:"status"`
+	ParserId               string  `json:"parser_id"`     // 解析器ID
+	ParserConfig           string  `json:"parser_config"` // 解析配置 JSON
+	CreatedTime            int64   `json:"created_time"`
+	UpdatedTime            int64   `json:"updated_time"`
 }
 
 type KnowledgeDocumentInfo struct {
-	Id              string               `json:"id"`
-	KnowledgeBaseId uint64               `json:"knowledge_base_id"`
-	DocName         string               `json:"doc_name"`
-	DocType         string               `json:"doc_type"` // pdf/word/txt
-	DocSize         int64                `json:"doc_size"` // 字节
-	StoragePath     string               `json:"storage_path"`
-	Description     string               `json:"description"`
-	Status          string               `json:"status"`      // 文档状态, disable-禁用, pending-待处理,indexing-索引中 ,enable-可用, fail-处理失败
-	ChunkCount      int64                `json:"chunk_count"` // 分片数量
-	ErrMsg          string               `json:"err_msg"`     // 失败原因
-	ParserConfig    SegmentationSettings `json:"parser_config"`
-	CreatedAt       string               `json:"created_at"`
-	UpdatedAt       string               `json:"updated_at"`
+	Id              string  `json:"id"`
+	KnowledgeBaseId string  `json:"knowledge_base_id"`
+	DocName         string  `json:"doc_name"`
+	DocType         string  `json:"doc_type"`
+	DocSize         int64   `json:"doc_size"`
+	StoragePath     string  `json:"storage_path"`
+	Description     string  `json:"description"`
+	Status          int64   `json:"status"`
+	RunStatus       string  `json:"run_status"`
+	ChunkNum        int64   `json:"chunk_num"`
+	TokenNum        int64   `json:"token_num"`
+	ParserConfig    string  `json:"parser_config"` // JSON string
+	Progress        float64 `json:"progress"`
+	ProgressMsg     string  `json:"progress_msg"`
+	CreatedBy       string  `json:"created_by"`
+	CreatedTime     int64   `json:"created_time"`
+	UpdatedTime     int64   `json:"updated_time"`
+}
+
+type ListJoinedTeamsResp struct {
+	List []JoinedTeam `json:"list"`
+}
+
+type ListKnowledgeBaseReq struct {
+	Page     int64  `form:"page,optional,default=1"`
+	PageSize int64  `form:"page_size,optional,default=20"`
+	Keyword  string `form:"keyword,optional"`
+}
+
+type ListKnowledgeBaseResp struct {
+	Total int64               `json:"total"`
+	List  []KnowledgeBaseInfo `json:"list"`
+}
+
+type ListKnowledgeDocumentReq struct {
+	KnowledgeBaseId string `form:"knowledge_base_id"`
+	Page            int64  `form:"page,optional,default=1"`
+	PageSize        int64  `form:"page_size,optional,default=20"`
+	Keyword         string `form:"keyword,optional"`
+}
+
+type ListKnowledgeDocumentResp struct {
+	Total int64                   `json:"total"`
+	List  []KnowledgeDocumentInfo `json:"list"`
+}
+
+type ListLlmFactoriesReq struct {
+}
+
+type ListLlmFactoriesResp struct {
+	List []LlmFactoryInfo `json:"list"`
+}
+
+type ListMembersResp struct {
+	List []TeamMember `json:"list"`
+}
+
+type ListTenantLlmGroupedResp struct {
+	List []TenantLlmGroupByFactory `json:"list"`
+}
+
+type ListTenantLlmReq struct {
+	LlmFactory string `form:"llm_factory,optional"` // 按厂商筛选
+	ModelType  string `form:"model_type,optional"`  // 按类型筛选
+	Status     int64  `form:"status,optional"`      // 按状态筛选
+	Page       int64  `form:"page,optional,default=1"`
+	PageSize   int64  `form:"page_size,optional,default=20"`
+}
+
+type ListTenantLlmResp struct {
+	Total int64           `json:"total"`
+	List  []TenantLlmInfo `json:"list"`
+}
+
+type LlmFactoryInfo struct {
+	Name    string   `json:"name"`
+	Logo    string   `json:"logo"`
+	Tags    string   `json:"tags"`     // 逗号分隔的模型类型
+	TagList []string `json:"tag_list"` // 拆分后的类型数组
+	Rank    int64    `json:"rank"`
+	Status  int64    `json:"status"`
 }
 
 type LoginRequest struct {
-	Username string `json:"username" example:"lucas"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
 type LoginResponse struct {
-	Token JwtToken `json:"token"`
-	User  UserInfo `json:"user"`
+	Token         JwtToken     `json:"token"`
+	User          UserInfo     `json:"user"`
+	CurrentTenant TenantInfo   `json:"current_tenant"` // 当前活跃租户
+	Tenants       []TenantInfo `json:"tenants"`        // 用户关联的所有租户
 }
 
-type PreviewChunk struct {
-	Index   string `json:"index"`   // 分块序号 Chunk-1
-	Content string `json:"content"` // 分块内容
-	Length  int    `json:"length"`  // 字符数,UI用于展示 "4 characters"
-}
-
-type PreviewChunkReq struct {
-	DocId    string               `json:"doc_id"`
-	Settings SegmentationSettings `json:"settings"`
-}
-
-type PreviewChunkResp struct {
-	DocId       string         `json:"doc_id"`
-	DocName     string         `json:"doc_name"`
-	TotalChunks int            `json:"total_chunks"` // 具体的预览块列表(5-10个块)
-	Chunks      []PreviewChunk `json:"chunks"`
-	ErrorMsg    string         `json:"error_msg"` // 如果解析失败, 返回该错误信息
+type ModelConfig struct {
+	ModelType string `json:"model_type"` // LLM, Embedding, Rerank, ...
+	LlmName   string `json:"llm_name"`   // 模型名称
+	MaxTokens int64  `json:"max_tokens,optional,default=8192"`
 }
 
 type RegisterRequest struct {
-	Username        string `json:"username"`
+	Nickname        string `json:"nickname"`
 	Email           string `json:"email"`
 	Password        string `json:"password"`
 	ConfirmPassword string `json:"confirm_password"`
@@ -349,7 +413,7 @@ type RetrievalConfig struct {
 
 type RetrieveLog struct {
 	Id              uint64          `json:"id"` // log id
-	KnowledgeBaseId uint64          `json:"knowledge_base_id"`
+	KnowledgeBaseId string          `json:"knowledge_base_id"`
 	Query           string          `json:"query"` // 原始查询
 	RetrievalMode   string          `json:"retrieval_mode"`
 	RetrievalParams RetrievalConfig `json:"retrieval_params"`
@@ -359,7 +423,7 @@ type RetrieveLog struct {
 }
 
 type RetrieveReq struct {
-	KnowledgeBaseId uint64          `path:"knowledge_base_id"`
+	KnowledgeBaseId string          `path:"knowledge_base_id"`
 	Query           string          `json:"query"`                                  // 用户查询语句
 	RetrievalMode   string          `json:"retrieval_mode,optional,default=hybrid"` // 检索模式: vector, fulltext, hybrid
 	RetrievalConfig RetrievalConfig `json:"retrieval_config,optional"`              // 详细检索配置
@@ -367,36 +431,21 @@ type RetrieveReq struct {
 }
 
 type RetrieveResp struct {
-	KnowledgeBaseID uint64           `json:"knowledge_base_id"`
+	KnowledgeBaseID string           `json:"knowledge_base_id"`
 	DocIDs          []string         `json:"doc_ids"`      // 涉及的文档ID列表
 	TimeCostMs      int64            `json:"time_cost_ms"` // 总检索耗时(ms)
 	Chunks          []RetrievalChunk `json:"chunks"`       // 召回结果列表
 }
 
-type SaveChunkSettingsReq struct {
-	KnowledgeBaseId uint64               `path:"knowledge_base_id"`
-	FileIds         []string             `json:"file_ids"`
-	Settings        SegmentationSettings `json:"settings"`
+type RetryDocumentReq struct {
+	Id string `path:"id"`
 }
 
-type SaveChunkSettingsResp struct {
-}
-
-type SegmentationPreCleanRule struct {
-	CleanWhitespace  bool `json:"clean_whitespace"`   // 替换掉连续的空格、换行符和制表符
-	RemoveUrlsEmails bool `json:"remove_urls_emails"` // 删除所有URL和电子邮件地址
-}
-
-type SegmentationSettings struct {
-	Separators         []string                 `json:"separators"`       // 分割符
-	MaxChunkLength     int                      `json:"max_chunk_length"` // 分段最大长度(单位characters)
-	ChunkOverlap       int                      `json:"chunk_overlap"`    // 分段重叠长度(单位characters)
-	PreCleanRule       SegmentationPreCleanRule `json:"pre_clean_rule"`
-	EnableQaGeneration bool                     `json:"enable_qa_generation,default=false"`
+type RetryDocumentResp struct {
 }
 
 type SetDefaultModelReq struct {
-	UserId    int64  `json:"user_id"`
+	UserId    string `json:"user_id"`  // 用户ID (UUID)
 	ModelId   int64  `json:"model_id"` // 对应user_api表的id
 	ModelType string `json:"model_type"`
 }
@@ -411,6 +460,43 @@ type StartNewChatResp struct {
 	ConversationId string `json:"conversation_id"`
 }
 
+type TeamMember struct {
+	UserId     string `json:"user_id"`
+	Nickname   string `json:"nickname"`
+	Email      string `json:"email"`
+	Role       string `json:"role"`        // owner | admin | member
+	Status     int64  `json:"status"`      // 1-有效, 0-禁用
+	JoinedTime int64  `json:"joined_time"` // 加入时间戳(ms)
+}
+
+type TenantInfo struct {
+	TenantId string `json:"tenant_id"`
+	Name     string `json:"name"`
+	Role     string `json:"role"` // owner|admin|member
+}
+
+type TenantLlmGroupByFactory struct {
+	LlmFactory  string          `json:"llm_factory"`
+	FactoryLogo string          `json:"factory_logo"`
+	ApiBase     string          `json:"api_base"`
+	Models      []TenantLlmInfo `json:"models"`
+}
+
+type TenantLlmInfo struct {
+	Id          int64  `json:"id"`
+	TenantId    string `json:"tenant_id"`
+	LlmFactory  string `json:"llm_factory"`
+	ModelType   string `json:"model_type"`
+	LlmName     string `json:"llm_name"`
+	ApiKey      string `json:"api_key"` // 返回时脱敏处理
+	ApiBase     string `json:"api_base"`
+	MaxTokens   int64  `json:"max_tokens"`
+	UsedTokens  int64  `json:"used_tokens"`
+	Status      int64  `json:"status"`
+	CreatedTime int64  `json:"created_time"`
+	UpdatedTime int64  `json:"updated_time"`
+}
+
 type UpdateConversationReq struct {
 	ConversationId string `path:"conversation_id"`
 	Title          string `json:"title"`
@@ -419,44 +505,64 @@ type UpdateConversationReq struct {
 type UpdateConversationResp struct {
 }
 
+type UpdateDocumentParserConfigReq struct {
+	Id           string `path:"id"`
+	ParserConfig string `json:"parser_config"` // JSON string
+}
+
+type UpdateDocumentParserConfigResp struct {
+}
+
+type UpdateKnowledgeBasePermissionReq struct {
+	Id         string `path:"id"`
+	Permission string `json:"permission"` // me | team
+}
+
+type UpdateKnowledgeBasePermissionResp struct {
+}
+
 type UpdateKnowledgeBaseReq struct {
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`
-	Name            string `json:"name,optional"`        // 知识库名称
-	Description     string `json:"description,optional"` // 知识库描述
-	Status          int64  `json:"status"`               // 状态:0-禁用,1-启用
-	RerankId        uint64 `json:"rerank_model_id,optional"`
-	RewriteId       uint64 `json:"rewrite_model_id,optional"`
-	QaId            uint64 `json:"qa_model_id,optional"`
-	ChatId          uint64 `json:"chat_model_id,optional"`
+	Id                     string  `path:"id"`
+	Name                   string  `json:"name,optional"`
+	Avatar                 string  `json:"avatar,optional"`
+	Language               string  `json:"language,optional"`
+	Description            string  `json:"description,optional"`
+	Permission             string  `json:"permission,optional"`
+	SimilarityThreshold    float64 `json:"similarity_threshold,optional"`
+	VectorSimilarityWeight float64 `json:"vector_similarity_weight,optional"`
+	Status                 int64   `json:"status,optional"`
+	ParserId               string  `json:"parser_id,optional"`     // 解析器ID: general | resume
+	ParserConfig           string  `json:"parser_config,optional"` // 解析配置 JSON
 }
 
 type UpdateKnowledgeBaseResp struct {
 }
 
-type UploadFileReq struct {
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`    // 上传到哪个知识库
-	Description     string `form:"description,optional"` // 文档描述
+type UpdateTenantLlmReq struct {
+	Id        int64  `path:"id"`
+	ApiKey    string `json:"api_key,optional"`
+	ApiBase   string `json:"api_base,optional"`
+	MaxTokens int64  `json:"max_tokens,optional"`
+	Status    int64  `json:"status,optional"`
 }
 
-type UploadFileResp struct {
-	Id      int64  `json:"id"`       // 文档ID
-	DocName string `json:"doc_name"` // 文档名称
-	DocType string `json:"doc_type"` // 文档类型
-	DocSize int64  `json:"doc_size"` // 文档大小
+type UploadDocumentReq struct {
+	KnowledgeBaseId string `form:"knowledge_base_id"`
 }
 
-type UploadMultiFileReq struct {
-	KnowledgeBaseId uint64 `path:"knowledge_base_id"`    // 上传到哪个知识库
-	Description     string `form:"description,optional"` // 文档描述
+type UploadDocumentResp struct {
+	FileIds []string           `json:"file_ids"` // 文件ID列表
+	Files   []UploadedFileInfo `json:"files"`    // 文件详细信息列表
 }
 
-type UploadMultiFileResp struct {
-	FileIds []string `json:"file_ids"` // 上传的文件ID列表
+type UploadedFileInfo struct {
+	Id      string `json:"id"`
+	DocName string `json:"doc_name"`
 }
 
 type UserApiInfo struct {
 	Id          int64   `json:"id"`
-	UserId      int64   `json:"user_id"`
+	UserId      string  `json:"user_id"` // 用户ID (UUID)
 	ConfigName  string  `json:"config_name"`
 	ApiKey      string  `json:"api_key"`
 	BaseUrl     string  `json:"base_url"`
@@ -474,6 +580,19 @@ type UserApiInfo struct {
 }
 
 type UserInfo struct {
-	UserId   int64  `json:"user_id"`
-	Username string `json:"username"`
+	UserId   string `json:"user_id"` // UUID v7
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar,optional"`
+	Language string `json:"language,optional"`
+}
+
+type VerifyInviteReq struct {
+	Code string `path:"code"` // 邀请码
+}
+
+type VerifyInviteResp struct {
+	TenantId   string `json:"tenant_id"`   // 租户ID
+	TenantName string `json:"tenant_name"` // 租户名称
+	Inviter    string `json:"inviter"`     // 邀请人昵称
 }

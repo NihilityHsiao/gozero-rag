@@ -61,7 +61,10 @@ func (s *StructureSplitter) Transform(ctx context.Context, src []*schema.Documen
 		for _, section := range sections {
 			// 如果 Section 内容本身就很短（小于 MaxChunkSize），直接做一个 Chunk
 			if len([]rune(section.Content)) <= s.config.MaxChunkSize {
-				chunk := s.createChunk(doc, section.Content, section.ActiveHeader, section.ActiveHeaderInfo)
+				chunk, err := s.createChunk(doc, section.Content, section.ActiveHeader, section.ActiveHeaderInfo)
+				if err != nil {
+					return nil, err
+				}
 				result = append(result, chunk)
 				continue
 			}
@@ -80,7 +83,10 @@ func (s *StructureSplitter) Transform(ctx context.Context, src []*schema.Documen
 			// 4. 上下文注入 (Context Injection) ✨
 			// 不再拼接到 Content，而是注入到 Metadata
 			for _, subDoc := range subDocs {
-				chunk := s.createChunk(doc, subDoc.Content, section.ActiveHeader, section.ActiveHeaderInfo)
+				chunk, err := s.createChunk(doc, subDoc.Content, section.ActiveHeader, section.ActiveHeaderInfo)
+				if err != nil {
+					return nil, err
+				}
 				result = append(result, chunk)
 			}
 		}
@@ -160,9 +166,14 @@ func (s *StructureSplitter) splitByHeaders(content string, headers []*HeaderInfo
 	return sections
 }
 
-func (s *StructureSplitter) createChunk(originDoc *schema.Document, content string, header string, headerInfo *HeaderInfo) *schema.Document {
+func (s *StructureSplitter) createChunk(originDoc *schema.Document, content string, header string, headerInfo *HeaderInfo) (*schema.Document, error) {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return nil, err
+	}
+
 	chunk := &schema.Document{
-		ID:       uuid.New().String(),
+		ID:       id.String(),
 		Content:  content,
 		MetaData: make(map[string]any),
 	}
@@ -179,5 +190,5 @@ func (s *StructureSplitter) createChunk(originDoc *schema.Document, content stri
 		chunk.MetaData[constant.MetaHeaderType] = headerInfo.Type
 	}
 
-	return chunk
+	return chunk, nil
 }

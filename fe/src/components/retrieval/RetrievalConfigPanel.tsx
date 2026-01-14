@@ -46,7 +46,7 @@ export type RetrievalFormValues = z.infer<typeof retrievalFormSchema>;
 interface RetrievalConfigPanelProps {
     onSearch: (values: RetrievalFormValues) => void;
     isLoading: boolean;
-    userId: number; // To fetch user models
+    userId: string; // To fetch user models
     defaultValues?: Partial<RetrievalFormValues>;
 }
 

@@ -11,7 +11,7 @@ export interface ChatRetrieveConfig {
 
 export interface ChatModelConfig {
     model_id?: number;
-    knowledge_base_ids?: number[];
+    knowledge_base_ids?: string[];
     system_prompt?: string;
     temperature?: number;
 
@@ -79,7 +79,7 @@ export interface ChatReq {
     chat_model_id: number;
     prompt: string;
     temperature: number;
-    knowledge_base_ids: number[];
+    knowledge_base_ids: string[];
     chat_retrieve_config: ChatRetrieveConfig;
 }
 

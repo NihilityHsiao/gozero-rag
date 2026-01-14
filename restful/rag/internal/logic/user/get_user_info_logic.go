@@ -35,24 +35,20 @@ func (l *GetUserInfoLogic) GetUserInfo(req *types.GetUserInfoReq) (resp *types.U
 		return nil, err
 	}
 
-	l.Logger.Infof("获取用户信息, uid: %d, 请求uid: %d", uid, req.Id)
+	l.Logger.Infof("获取用户信息, uid: %s", uid)
 
-	// 校验权限：只能查询自己的信息，或者请求的id为0表示查询当前用户
-	queryUid := req.Id
-	if queryUid == 0 {
-		queryUid = uid
-	} else if queryUid != uid {
-		return nil, xerr.NewErrCode(xerr.InternalError)
-	}
-
-	findUser, err := l.svcCtx.UserModel.FindOne(l.ctx, queryUid)
+	// 查询用户信息
+	findUser, err := l.svcCtx.UserModel.FindOne(l.ctx, uid)
 	if err != nil {
-		logx.Errorf("查询用户失败,sql error:%v, req:%v", err, req)
+		logx.Errorf("查询用户失败,sql error:%v, uid:%s", err, uid)
 		return nil, xerr.NewErrCodeMsg(xerr.InternalError, "用户不存在")
 	}
 
 	return &types.UserInfo{
-		UserId:   queryUid,
-		Username: findUser.Username,
+		UserId:   findUser.Id,
+		Nickname: findUser.Nickname,
+		Email:    findUser.Email,
+		Avatar:   findUser.Avatar.String,
+		Language: findUser.Language,
 	}, nil
 }

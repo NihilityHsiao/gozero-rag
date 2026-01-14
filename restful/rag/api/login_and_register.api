@@ -1,35 +1,41 @@
-syntax =  "v1"
+syntax = "v1"
 import "./common.api"
 
 type (
-	LoginRequest {
-        Username    string `json:"username" example:"lucas"`
-//		Email    string `json:"email" example:"xyj.work@139.com"`
-		Password string `json:"password"`
-	}
+    // 登录请求 (使用Email登录)
+    LoginRequest {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
 
-	LoginResponse {
-        Token JwtToken `json:"token"`
-		User UserInfo `json:"user"`
-	}
+    // 登录响应 (包含租户信息)
+    LoginResponse {
+        Token         JwtToken     `json:"token"`
+        User          UserInfo     `json:"user"`
+        CurrentTenant TenantInfo   `json:"current_tenant"`   // 当前活跃租户
+        Tenants       []TenantInfo `json:"tenants"`          // 用户关联的所有租户
+    }
 
-	RegisterRequest {
-        Username    string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-		ConfirmPassword string `json:"confirm_password"`
-	}
+    // 注册请求
+    RegisterRequest {
+        Nickname        string `json:"nickname"`
+        Email           string `json:"email"`
+        Password        string `json:"password"`
+        ConfirmPassword string `json:"confirm_password"`
+    }
+
+    // 注册响应 (复用 LoginResponse, 注册后自动登录)
 )
 
 @server (
-	group : login
-	prefix : /v1
-	tags: "用户登录和注册"
+    group  : login
+    prefix : /v1
+    tags   : "用户登录和注册"
 )
 service rag {
     @handler login
-	post /user/login (LoginRequest) returns (LoginResponse)
+    post /user/login (LoginRequest) returns (LoginResponse)
 
-	@handler register
-	post /user/register (RegisterRequest) returns (LoginResponse)
+    @handler register
+    post /user/register (RegisterRequest) returns (LoginResponse)
 }

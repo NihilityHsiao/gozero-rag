@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
@@ -20,9 +20,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { login } from '@/api/auth';
 import { useAuthStore } from '@/store/useAuthStore';
 
-// Define schema using zod
+// 使用 email 登录的表单验证
 const formSchema = z.object({
-  username: z.string().min(1, { message: '请输入用户名' }),
+  email: z.string().email({ message: '请输入有效的邮箱地址' }),
   password: z.string().min(1, { message: '请输入密码' }),
 });
 
@@ -31,28 +31,26 @@ export default function Login() {
   const { login: setAuth } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
 
-  // Initialize form
+  // 初始化表单
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      username: '',
+      email: '',
       password: '',
     },
   });
 
-  // Submit handler
+  // 提交处理
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
       const res = await login(values);
-      // Success
+      // 登录成功
       setAuth(res);
       toast.success('登录成功');
       navigate('/knowledge', { replace: true });
     } catch (error: any) {
-      // Error handled in request interceptor, but we can double check here
       console.error(error);
-      // toast.error is already called in request interceptor for business errors
     } finally {
       setIsLoading(false);
     }
@@ -66,7 +64,7 @@ export default function Login() {
             欢迎回来
           </CardTitle>
           <CardDescription className="text-center text-gray-500">
-            请输入您的账号信息
+            请输入您的邮箱和密码登录
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -74,13 +72,14 @@ export default function Login() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="username"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">用户名</FormLabel>
+                    <FormLabel className="text-sm font-medium">邮箱</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="输入用户名"
+                        type="email"
+                        placeholder="your@email.com"
                         {...field}
                         className="h-10 focus-visible:ring-blue-600"
                       />
@@ -123,6 +122,12 @@ export default function Login() {
               </Button>
             </form>
           </Form>
+          <div className="mt-4 text-center text-sm text-gray-500">
+            还没有账号？{' '}
+            <Link to="/auth/register" className="text-blue-600 hover:underline">
+              立即注册
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -3,11 +3,12 @@ package retriever
 import (
 	"context"
 	"fmt"
+	"gozero-rag/internal/model/chunk"
 	"gozero-rag/internal/rag_core/metric"
 	"gozero-rag/internal/rag_core/rerank"
-	vectorstore "gozero-rag/internal/vector_store"
+
+	//vectorstore "gozero-rag/internal/vector_store"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/cloudwego/eino/compose"
@@ -26,7 +27,7 @@ type ModelConfig struct {
 
 type RetrieveRequest struct {
 	Query           string
-	KnowledgeBaseId uint64 // 知识库id
+	KnowledgeBaseId string // 知识库id
 	TopK            int
 
 	EmbeddingModelConfig ModelConfig
@@ -41,7 +42,7 @@ type RetrieveRequest struct {
 	KeywordWeight float64
 }
 
-func NewRetrieverService(ctx context.Context, client vectorstore.Client) (*RetrieverService, error) {
+func NewRetrieverService(ctx context.Context, chunkModel chunk.ChunkModel) (*RetrieverService, error) {
 	const (
 		NodeRetriever = "Retriever"
 		NodeRerank    = "Rerank"
@@ -50,7 +51,7 @@ func NewRetrieverService(ctx context.Context, client vectorstore.Client) (*Retri
 
 	g := compose.NewGraph[string, []*schema.Document]()
 
-	rtr, err := NewVectorRetriever(client)
+	rtr, err := NewChunkRetriever(chunkModel)
 	if err != nil {
 		return nil, err
 	}
@@ -94,12 +95,12 @@ func NewRetrieverService(ctx context.Context, client vectorstore.Client) (*Retri
 		return nil, err
 	}
 
-	return &RetrieverService{vectorStore: client, runner: r}, nil
+	return &RetrieverService{chunkModel: chunkModel, runner: r}, nil
 }
 
 type RetrieverService struct {
-	vectorStore vectorstore.Client
-	runner      compose.Runnable[string, []*schema.Document]
+	chunkModel chunk.ChunkModel
+	runner     compose.Runnable[string, []*schema.Document]
 }
 
 // 从 context 中提取 RetrieveRequest
@@ -148,7 +149,7 @@ func (r *RetrieverService) Query(ctx context.Context, req *RetrieveRequest, opts
 	ctx = r.WithRetrieveRequest(ctx, req)
 
 	start := time.Now()
-	kbId := strconv.FormatUint(req.KnowledgeBaseId, 10)
+	kbId := req.KnowledgeBaseId
 	mode := string(req.Mode)
 
 	// 记录请求总数

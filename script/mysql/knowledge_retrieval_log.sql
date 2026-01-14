@@ -1,18 +1,18 @@
 use gozero_rag;
-drop table if exists `knowledge_retrieval_log`;
 
-CREATE TABLE `knowledge_retrieval_log` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` int(11) not null  COMMENT '用户唯一标识',
-  `knowledge_base_id` bigint(20) unsigned NOT NULL COMMENT '知识库ID',
-  `query` varchar(2048) NOT NULL DEFAULT '' COMMENT '用户原始查询',
-  `retrieval_mode` varchar(2048) DEFAULT '' COMMENT '检索模式 vector/fulltext/hybrid',
-  `retrieval_params` json DEFAULT NULL COMMENT '检索参数快照(阈值/权重等)',
-  `chunk_count` int(11) NOT NULL DEFAULT '0' COMMENT '召回chunk数',
-  `time_cost_ms` int(11) NOT NULL DEFAULT '0' COMMENT '查询耗时(ms)',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-    INDEX `idx_user_id` (`user_id`),
-  INDEX `idx_kb_created` (`knowledge_base_id`, `created_at`)
-)  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='RAG-知识库召回日志表';
+DROP TABLE IF EXISTS `knowledge_retrieval_log`;
+CREATE TABLE `knowledge_retrieval_log`
+(
+    `id`               bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `knowledge_base_id` varchar(36) NOT NULL COMMENT '知识库ID (UUID)',
+    `user_id`          varchar(32) NOT NULL COMMENT '用户ID (UUID)',
+    `query`            text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户查询',
+    `retrieval_mode`   varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '召回模式: vector, fulltext, hybrid',
+    `retrieval_params` json DEFAULT NULL COMMENT '召回参数快照',
+    `chunk_count`      int NOT NULL DEFAULT 0 COMMENT '召回片段数量',
+    `time_cost_ms`     int NOT NULL DEFAULT 0 COMMENT '耗时(ms)',
+    `created_at`       datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_kb_id` (`knowledge_base_id`),
+    KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识库召回日志表';

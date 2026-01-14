@@ -1,0 +1,35 @@
+syntax = "v1"
+import "./common.api"
+
+type (
+    // 厂商信息
+    LlmFactoryInfo {
+        Name    string   `json:"name"`
+        Logo    string   `json:"logo"`
+        Tags    string   `json:"tags"`       // 逗号分隔的模型类型
+        TagList []string `json:"tag_list"`   // 拆分后的类型数组
+        Rank    int64    `json:"rank"`
+        Status  int64    `json:"status"`
+    }
+
+    // 获取厂商列表请求
+    ListLlmFactoriesReq {
+    }
+
+    // 获取厂商列表响应
+    ListLlmFactoriesResp {
+        List []LlmFactoryInfo `json:"list"`
+    }
+)
+
+@server (
+    jwt    : Auth
+    tags   : "大模型厂商"
+    prefix : /v1
+    group  : llm_factories
+)
+service rag {
+    @doc "获取系统支持的LLM厂商列表"
+    @handler listLlmFactories
+    get /llm/factories (ListLlmFactoriesReq) returns (ListLlmFactoriesResp)
+}

@@ -6,7 +6,7 @@ export interface HybridWeights {
 export interface HybridStrategy {
     type?: 'weighted' | 'rerank'; // default weighted
     weights?: HybridWeights;
-    rerank_model_id?: number;
+    rerank_model_id?: string;
 }
 
 export interface RetrievalConfig {
@@ -16,7 +16,7 @@ export interface RetrievalConfig {
 }
 
 export interface RetrieveReq {
-    knowledge_base_id: number;
+    knowledge_base_id: string;
     query: string;
     retrieval_mode?: 'vector' | 'fulltext' | 'hybrid'; // default hybrid
     retrieval_config?: RetrievalConfig;
@@ -33,7 +33,7 @@ export interface RetrievalChunk {
 }
 
 export interface RetrieveResp {
-    knowledge_base_id: number;
+    knowledge_base_id: string;
     doc_ids: string[];
     time_cost_ms: number;
     chunks: RetrievalChunk[];
@@ -41,7 +41,7 @@ export interface RetrieveResp {
 
 export interface RetrieveLog {
     id: number;
-    knowledge_base_id: number;
+    knowledge_base_id: string;
     query: string;
     retrieval_mode: string;
     retrieval_params: RetrievalConfig;
@@ -51,7 +51,7 @@ export interface RetrieveLog {
 }
 
 export interface GetRetrieveLogReq {
-    knowledge_base_id: number;
+    knowledge_base_id: string;
     page: number;
     page_size: number;
 }

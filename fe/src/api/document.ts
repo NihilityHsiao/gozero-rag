@@ -7,15 +7,26 @@ import type {
   GetKnowledgeDocumentChunksResp,
 } from '@/types';
 
-export const getDocDetail = (knowledgeBaseId: number, docId: string) => {
-  return request.get<any, KnowledgeDocumentInfo>(`/knowledge/${knowledgeBaseId}/get_document/${docId}`);
+export const getDocDetail = (docId: string) => {
+  return request.get<any, KnowledgeDocumentInfo>(`/knowledge_document/${docId}`);
 };
 
 export const getDocumentChunks = (params: GetKnowledgeDocumentChunksReq) => {
-  return request.get<any, GetKnowledgeDocumentChunksResp>(`/knowledge/${params.knowledge_base_id}/${params.document_id}/chunks`, { params });
+  return request.get<any, GetKnowledgeDocumentChunksResp>(`/knowledge_document/${params.document_id}/chunks`, { params });
 };
 
+export const getDocumentList = (knowledgeBaseId: string, params: GetKnowledgeDocumentListReq) => {
+  return request.get<any, GetKnowledgeDocumentListResp>(`/knowledge_document`, {
+    params: {
+      ...params,
+      knowledge_base_id: knowledgeBaseId
+    }
+  });
+};
 
-export const getDocumentList = (knowledgeBaseId: number, params: GetKnowledgeDocumentListReq) => {
-  return request.get<any, GetKnowledgeDocumentListResp>(`/knowledge/${knowledgeBaseId}/list`, { params });
+export const batchParseDocument = (knowledgeBaseId: string, documentIds: string[]) => {
+  return request.post<any, any>(`/knowledge_document/batch_parse`, {
+    knowledge_base_id: knowledgeBaseId,
+    document_ids: documentIds,
+  });
 };

@@ -7,7 +7,7 @@ import type { GetUserApiListReq, GetUserApiListResp, AddUserApiReq, AddUserApiRe
  * @param params 查询参数（model_type, status）
  */
 export const getUserApiList = (
-    user_id: number,
+    user_id: string,
     params?: GetUserApiListReq
 ) => {
     return request.get<any, GetUserApiListResp>(`/user/api/${user_id}`, { params });
@@ -30,6 +30,6 @@ export const deleteUserApi = (id: number) => {
 /**
  * 设置默认模型
  */
-export const setUserModelDefault = (data: { user_id: number; model_id: number; model_type: string }) => {
+export const setUserModelDefault = (data: { user_id: string; model_id: number; model_type: string }) => {
     return request.post<any, any>('/user/api/set_default', data);
 };

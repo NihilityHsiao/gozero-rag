@@ -1,0 +1,112 @@
+syntax = "v1"
+import "./common.api"
+
+type (
+    // 租户LLM配置信息
+    TenantLlmInfo {
+        Id          int64  `json:"id"`
+        TenantId    string `json:"tenant_id"`
+        LlmFactory  string `json:"llm_factory"`
+        ModelType   string `json:"model_type"`
+        LlmName     string `json:"llm_name"`
+        ApiKey      string `json:"api_key"`       // 返回时脱敏处理
+        ApiBase     string `json:"api_base"`
+        MaxTokens   int64  `json:"max_tokens"`
+        UsedTokens  int64  `json:"used_tokens"`
+        Status      int64  `json:"status"`
+        CreatedTime int64  `json:"created_time"`
+        UpdatedTime int64  `json:"updated_time"`
+    }
+
+    // 批量添加模型的单个模型配置
+    ModelConfig {
+        ModelType string `json:"model_type"`       // LLM, Embedding, Rerank, ...
+        LlmName   string `json:"llm_name"`         // 模型名称
+        MaxTokens int64  `json:"max_tokens,optional,default=8192"`
+    }
+
+    // 批量添加租户LLM配置请求
+    AddTenantLlmReq {
+        LlmFactory string        `json:"llm_factory"`      // 厂商名称
+        ApiKey     string        `json:"api_key"`          // 共享的API密钥
+        ApiBase    string        `json:"api_base"`         // 共享的API基础地址
+        Models     []ModelConfig `json:"models"`           // 要添加的模型列表
+    }
+
+    // 批量添加租户LLM配置响应
+    AddTenantLlmResp {
+        SuccessCount int64    `json:"success_count"`    // 成功添加数量
+        FailedCount  int64    `json:"failed_count"`     // 失败数量
+        FailedModels []string `json:"failed_models"`    // 失败的模型名称
+    }
+
+    // 获取租户LLM配置列表请求
+    ListTenantLlmReq {
+        LlmFactory string `form:"llm_factory,optional"` // 按厂商筛选
+        ModelType  string `form:"model_type,optional"`  // 按类型筛选
+        Status     int64  `form:"status,optional"`      // 按状态筛选
+        Page       int64  `form:"page,optional,default=1"`
+        PageSize   int64  `form:"page_size,optional,default=20"`
+    }
+
+    // 获取租户LLM配置列表响应
+    ListTenantLlmResp {
+        Total int64           `json:"total"`
+        List  []TenantLlmInfo `json:"list"`
+    }
+
+    // 更新租户LLM配置请求
+    UpdateTenantLlmReq {
+        Id        int64  `path:"id"`
+        ApiKey    string `json:"api_key,optional"`
+        ApiBase   string `json:"api_base,optional"`
+        MaxTokens int64  `json:"max_tokens,optional"`
+        Status    int64  `json:"status,optional"`
+    }
+
+    // 删除租户LLM配置请求
+    DeleteTenantLlmReq {
+        Id int64 `path:"id"`
+    }
+
+    // 按厂商分组的模型列表
+    TenantLlmGroupByFactory {
+        LlmFactory  string          `json:"llm_factory"`
+        FactoryLogo string          `json:"factory_logo"`
+        ApiBase     string          `json:"api_base"`
+        Models      []TenantLlmInfo `json:"models"`
+    }
+
+    // 获取按厂商分组的列表响应
+    ListTenantLlmGroupedResp {
+        List []TenantLlmGroupByFactory `json:"list"`
+    }
+)
+
+@server (
+    jwt    : Auth
+    tags   : "租户LLM配置"
+    prefix : /v1
+    group  : tenant_llm
+)
+service rag {
+    @doc "批量添加租户LLM配置"
+    @handler addTenantLlm
+    post /tenant/llm (AddTenantLlmReq) returns (AddTenantLlmResp)
+
+    @doc "获取租户LLM配置列表"
+    @handler listTenantLlm
+    get /tenant/llm (ListTenantLlmReq) returns (ListTenantLlmResp)
+
+    @doc "获取租户LLM配置列表(按厂商分组)"
+    @handler listTenantLlmGrouped
+    get /tenant/llm/grouped (ListTenantLlmReq) returns (ListTenantLlmGroupedResp)
+
+    @doc "更新租户LLM配置"
+    @handler updateTenantLlm
+    put /tenant/llm/:id (UpdateTenantLlmReq)
+
+    @doc "删除租户LLM配置"
+    @handler deleteTenantLlm
+    delete /tenant/llm/:id (DeleteTenantLlmReq)
+}

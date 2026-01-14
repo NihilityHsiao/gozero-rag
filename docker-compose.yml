@@ -15,7 +15,8 @@ services:
       - mysql-data:/var/lib/mysql
       - ./script/mysql/user.sql:/docker-entrypoint-initdb.d/user.sql
       - ./script/mysql/user_api.sql:/docker-entrypoint-initdb.d/user_api.sql
-      - ./script/mysql/knowledge.sql:/docker-entrypoint-initdb.d/knowledge.sql
+      - ./script/mysql/knowledge_base.sql:/docker-entrypoint-initdb.d/knowledge_base.sql
+      - ./script/mysql/knowledge_document.sql:/docker-entrypoint-initdb.d/knowledge_document.sql
       - ./script/mysql/knowledge_retrieval_log.sql:/docker-entrypoint-initdb.d/knowledge_retrieval_log.sql
 
     healthcheck:
@@ -100,53 +101,93 @@ services:
     networks:
       - app-network
 
-  # 5. Milvus向量数据库服务
-  milvus:
-    image: milvusdb/milvus:v2.6.7
-    container_name: milvus-standalone
-    restart: always
-    ports:
-      - "19530:19530"
-      - "9091:9091"
-    volumes:
-      - milvus-data:/var/lib/milvus
-    depends_on:
-      etcd:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+  # 5. Milvus向量数据库服务 (Commented out for Phase 3 Migration to ES)
+#  milvus:
+#    image: milvusdb/milvus:v2.6.7
+#    container_name: milvus-standalone
+#    restart: always
+#    ports:
+#      - "19530:19530"
+#      - "9091:9091"
+#    volumes:
+#      - milvus-data:/var/lib/milvus
+#    depends_on:
+#      etcd:
+#        condition: service_healthy
+#      minio:
+#        condition: service_healthy
+#    environment:
+#      - ETCD_ENDPOINTS=etcd:2379
+#      - MINIO_ADDRESS=minio:9000
+#      - MINIO_ROOT_USER=minioadmin
+#      - MINIO_ROOT_PASSWORD=minioadmin
+#      - MINIO_BUCKET_NAME=milvus-bucket
+#      - MINIO_USE_SSL=false
+#    command: ["milvus", "run", "standalone"]
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+#      interval: 30s
+#      start_period: 90s
+#      timeout: 20s
+#      retries: 3
+#    networks:
+#      - app-network
+
+  # 6. Attu - Milvus管理界面 (Commented out)
+#  attu:
+#    image: zilliz/attu:v2.6
+#    platform: linux/amd64
+#    container_name: milvus-attu
+#    restart: always
+#    ports:
+#      - "8000:3000"
+#    depends_on:
+#      milvus:
+#        condition: service_healthy
+#    environment:
+#      - MILVUS_URL=milvus:19530
+#    networks:
+#      - app-network
+
+  # 7. Elasticsearch (Vector Store & Search)
+  elasticsearch:
+    image: elasticsearch:8.11.3
+    container_name: elasticsearch
     environment:
-      - ETCD_ENDPOINTS=etcd:2379
-      - MINIO_ADDRESS=minio:9000
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-      - MINIO_BUCKET_NAME=milvus-bucket
-      - MINIO_USE_SSL=false
-    command: ["milvus", "run", "standalone"]
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - TZ=Asia/Shanghai
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+      - ./script/elasticsearch/plugins:/usr/share/elasticsearch/plugins # Plugin mounting
+    networks:
+      - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
       interval: 30s
-      start_period: 90s
       timeout: 20s
       retries: 3
-    networks:
-      - app-network
-
-  # 6. Attu - Milvus管理界面
-  attu:
-    image: zilliz/attu:v2.6
-    platform: linux/amd64
-    container_name: milvus-attu
     restart: always
-    ports:
-      - "8000:3000"
-    depends_on:
-      milvus:
-        condition: service_healthy
+
+  # 8. Kibana (Optional, for ES visualization)
+  kibana:
+    image: kibana:8.11.3
+    container_name: kibana
     environment:
-      - MILVUS_URL=milvus:19530
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - TZ=Asia/Shanghai
+    ports:
+      - "5601:5601"
     networks:
       - app-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: always
 
   prometheus:
     image: prom/prometheus:v3.8.0
@@ -292,6 +333,8 @@ volumes:
   minio-data:
     driver: local
   milvus-data:
+    driver: local
+  es-data:
     driver: local
   prometheus-data:
     driver: local

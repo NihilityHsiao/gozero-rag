@@ -2,7 +2,7 @@ syntax = "v1"
 import "./common.api"
 type(
     GetUserInfoReq {
-        Id int64  `json:"id"`
+        Id string  `json:"id,optional"`  // 用户ID (UUID), 可选，不传则查询当前登录用户
     }
 
     // 添加用户API配置请求
@@ -37,7 +37,7 @@ type(
 
     // 获取用户API配置列表请求
     GetUserApiListReq {
-        UserId   int64   `path:"user_id"`
+        UserId   string   `path:"user_id"`                        // 用户ID (UUID)
         ModelType string `form:"model_type,optional"`          // 模型类型筛选
         Status    int    `form:"status,optional"`              // 状态筛选:0-禁用,1-启用
         Page      int    `form:"page,optional,default=1"`      // 页码
@@ -47,7 +47,7 @@ type(
     // 用户API配置信息
     UserApiInfo {
         Id          int64   `json:"id"`
-        UserId      int64   `json:"user_id"`
+        UserId      string  `json:"user_id"`                    // 用户ID (UUID)
         ConfigName  string  `json:"config_name"`
         ApiKey      string  `json:"api_key"`
         BaseUrl     string  `json:"base_url"`
@@ -73,7 +73,7 @@ type(
 
     // 获取用户所有指定的模型
     GetUserModelReq {
-        UserId int64 `path:"user_id"`
+        UserId string `path:"user_id"`                    // 用户ID (UUID)
         // 仅支持 embedding、chat、qa、rewrite、rerank
         ModelType string `path:"model_type"`
     }
@@ -86,7 +86,7 @@ type(
 
     // 设置模型为默认模型
     SetDefaultModelReq{
-        UserId int64 `json:"user_id"`
+        UserId string `json:"user_id"`                    // 用户ID (UUID)
         ModelId int64 `json:"model_id"` // 对应user_api表的id
         ModelType string `json:"model_type"`
     }

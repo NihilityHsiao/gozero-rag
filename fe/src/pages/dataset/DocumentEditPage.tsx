@@ -59,7 +59,7 @@ export default function DocumentEditPage() {
         const settings = form.getValues();
         setPreviewLoading(true);
         try {
-            const res = await previewChunks(Number(knowledgeId), { doc_id: docId, settings });
+            const res = await previewChunks(knowledgeId, { doc_id: docId, settings });
             setPreviewResults([res]);
         } catch (error) {
             console.error(error);
@@ -73,7 +73,7 @@ export default function DocumentEditPage() {
         if (!knowledgeId || !docId) return;
         setSaveLoading(true);
         try {
-            await saveChunkSettings(Number(knowledgeId), { file_ids: [docId], settings: data });
+            await saveChunkSettings(knowledgeId, { file_ids: [docId], settings: data });
             toast.success('分段配置已保存');
             navigate(`/knowledge/${knowledgeId}/documents`);
         } catch (error) {

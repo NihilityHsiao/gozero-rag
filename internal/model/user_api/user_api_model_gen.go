@@ -32,7 +32,7 @@ type (
 	userApiModel interface {
 		Insert(ctx context.Context, data *UserApi) (sql.Result, error)
 		FindOne(ctx context.Context, id uint64) (*UserApi, error)
-		FindOneByUserIdModelTypeModelName(ctx context.Context, userId int64, modelType string, modelName string) (*UserApi, error)
+		FindOneByUserIdModelTypeModelName(ctx context.Context, userId string, modelType string, modelName string) (*UserApi, error)
 		Update(ctx context.Context, data *UserApi) error
 		Delete(ctx context.Context, id uint64) error
 	}
@@ -44,7 +44,7 @@ type (
 
 	UserApi struct {
 		Id          uint64    `db:"id"`          // 主键ID
-		UserId      int64     `db:"user_id"`     // 用户唯一标识，自增主键
+		UserId      string    `db:"user_id"`     // 用户ID (UUID)
 		ConfigName  string    `db:"config_name"` // 配置名称（如：通用问答模型、长文本总结模型）
 		ApiKey      string    `db:"api_key"`     // open ai API密钥
 		BaseUrl     string    `db:"base_url"`    // 基础请求地址
@@ -101,7 +101,7 @@ func (m *defaultUserApiModel) FindOne(ctx context.Context, id uint64) (*UserApi,
 	}
 }
 
-func (m *defaultUserApiModel) FindOneByUserIdModelTypeModelName(ctx context.Context, userId int64, modelType string, modelName string) (*UserApi, error) {
+func (m *defaultUserApiModel) FindOneByUserIdModelTypeModelName(ctx context.Context, userId string, modelType string, modelName string) (*UserApi, error) {
 	userApiUserIdModelTypeModelNameKey := fmt.Sprintf("%s%v:%v:%v", cacheUserApiUserIdModelTypeModelNamePrefix, userId, modelType, modelName)
 	var resp UserApi
 	err := m.QueryRowIndexCtx(ctx, &resp, userApiUserIdModelTypeModelNameKey, m.formatPrimary, func(ctx context.Context, conn sqlx.SqlConn, v any) (i any, e error) {

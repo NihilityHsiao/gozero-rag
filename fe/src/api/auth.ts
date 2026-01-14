@@ -1,13 +1,12 @@
 import request from '@/utils/request';
-import type { LoginResponse } from '@/types/auth';
+import type { LoginResponse, LoginRequest, RegisterRequest } from '@/types/auth';
 
-export interface LoginReq {
-  username: string;
-  password?: string;
-  email?: string;
-}
-
-export const login = (data: LoginReq) => {
+// 登录
+export const login = (data: LoginRequest) => {
   return request.post<any, LoginResponse>('/user/login', data);
 };
 
+// 注册
+export const register = (data: RegisterRequest) => {
+  return request.post<any, LoginResponse>('/user/register', data);
+};

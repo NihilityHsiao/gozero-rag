@@ -72,7 +72,7 @@ export default function StepProcess({ files, onBack }: StepProcessProps) {
         const settings = form.getValues();
         setPreviewLoading(true);
         try {
-            const res = await previewChunks(Number(knowledgeId), { doc_id: selectedDocId, settings });
+            const res = await previewChunks(knowledgeId, { doc_id: selectedDocId, settings });
             // Wrap in array for ChunkPreview if it expects multiple, but we only have one now
             setPreviewResults([res]);
         } catch (error) {
@@ -87,7 +87,7 @@ export default function StepProcess({ files, onBack }: StepProcessProps) {
         if (!knowledgeId) return;
         setProcessLoading(true);
         try {
-            await processFiles(Number(knowledgeId), { file_ids: files.map(f => f.id), settings: data });
+            await processFiles(knowledgeId, { file_ids: files.map(f => f.id), settings: data });
             toast.success('文档正在处理中');
             navigate(`/knowledge/${knowledgeId}/documents`);
         } catch (error) {

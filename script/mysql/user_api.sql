@@ -2,7 +2,7 @@ use gozero_rag;
 drop table if exists user_api;
 CREATE TABLE `user_api` (
    `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-   `user_id` int(11) not null COMMENT '用户唯一标识，自增主键',
+   `user_id` varchar(32) NOT NULL COMMENT '用户ID (UUID)',
    `config_name` varchar(64) NOT NULL COMMENT '配置名称（如：通用问答模型、长文本总结模型）',
    `api_key` varchar(256) NOT NULL COMMENT 'open ai API密钥',
    `base_url` varchar(512) NOT NULL DEFAULT 'https://api.siliconflow.cn/v1' COMMENT '基础请求地址',

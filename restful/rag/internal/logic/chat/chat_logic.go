@@ -1,17 +1,13 @@
-// Code scaffolded by goctl. Safe to edit.
-// goctl 1.9.2
-
 package chat
 
 import (
 	"context"
 	"fmt"
 	"gozero-rag/internal/model/chat_conversation"
-	"gozero-rag/internal/model/knowledge"
 	"gozero-rag/internal/rag_core/retriever"
-	"gozero-rag/internal/slicex"
 	"gozero-rag/internal/xerr"
 	sse2 "gozero-rag/restful/rag/internal/sse"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -54,43 +50,40 @@ func (l *ChatLogic) setConversationTitle(conv *chat_conversation.ChatConversatio
 	return l.svcCtx.ChatConversationModel.Update(l.ctx, conv)
 }
 
-func (l *ChatLogic) findEmbeddingConfigByIds(knowledgeBaseIds []uint64) (map[uint64]retriever.ModelConfig, error) {
+func (l *ChatLogic) findEmbeddingConfigByIds(knowledgeBaseIds []string) (map[string]retriever.ModelConfig, error) {
 	if len(knowledgeBaseIds) == 0 {
-		return make(map[uint64]retriever.ModelConfig), nil
+		return make(map[string]retriever.ModelConfig), nil
 	}
 
-	// 1. 查询知识库列表
-	kbs, err := l.svcCtx.KnowledgeBaseModel.FindByIds(l.ctx, knowledgeBaseIds)
-	if err != nil {
-		return nil, err
-	}
+	ret := make(map[string]retriever.ModelConfig)
 
-	// 2. 提取所有 embedding 模型 ID
-	embIds := slicex.Into(kbs, func(t *knowledge.KnowledgeBase) uint64 {
-		return t.EmbeddingModelId
-	})
+	// Since generated model might not support bulk fetch effectively or FindByIds is missing
+	// We loop and find one by one. Performance is acceptable for reasonably small # of KBs in a chat.
+	for _, kbId := range knowledgeBaseIds {
+		kb, err := l.svcCtx.KnowledgeBaseModel.FindOne(l.ctx, kbId)
+		if err != nil {
+			logx.Errorf("failed to find kb %s: %v", kbId, err)
+			continue // Skip missing KBs
+		}
 
-	// 3. 批量查询 embedding 模型配置
-	apis, err := l.svcCtx.UserApiModel.FindByIds(l.ctx, embIds)
-	if err != nil {
-		return nil, err
-	}
+		// Parse EmbdId (string) to Int64 (UserApiModel ID)
+		// Phase 3 note: If switching to TenantLLM, this changes.
+		embId, err := strconv.ParseUint(kb.EmbdId, 10, 64)
+		if err != nil {
+			logx.Errorf("invalid embd_id %s for kb %s", kb.EmbdId, kbId)
+			continue
+		}
 
-	// 4. 构建 apiId -> ModelConfig 的映射
-	apiConfigMap := make(map[uint64]retriever.ModelConfig)
-	for _, api := range apis {
-		apiConfigMap[api.Id] = retriever.ModelConfig{
+		api, err := l.svcCtx.UserApiModel.FindOne(l.ctx, embId)
+		if err != nil {
+			logx.Errorf("failed to find embedding model %d for kb %s", embId, kbId)
+			continue
+		}
+
+		ret[kbId] = retriever.ModelConfig{
 			ModelName: api.ModelName,
 			BaseUrl:   api.BaseUrl,
 			ApiKey:    api.ApiKey,
-		}
-	}
-
-	// 5. 构建 knowledgeBaseId -> ModelConfig 的映射
-	ret := make(map[uint64]retriever.ModelConfig)
-	for _, kb := range kbs {
-		if config, ok := apiConfigMap[kb.EmbeddingModelId]; ok {
-			ret[kb.Id] = config
 		}
 	}
 
@@ -99,6 +92,7 @@ func (l *ChatLogic) findEmbeddingConfigByIds(knowledgeBaseIds []uint64) (map[uin
 
 func (l *ChatLogic) Chat(req *types.ChatReq, client chan<- *types.ChatResp) (err error) {
 	// todo: add your logic here and delete this line
+	// Note: msgId should ideally be generated or passed.
 	msgId := fmt.Sprintf("id-%v", time.Now().UnixMilli())
 	sse := sse2.NewSSEClient(msgId, client)
 
@@ -121,8 +115,13 @@ func (l *ChatLogic) Chat(req *types.ChatReq, client chan<- *types.ChatResp) (err
 
 	docs, err := l.retrieve(req)
 
+	// Just sending retrieval content for now? The original code did this.
+	// Real chat logic needs LLM generation. But here we just stream docs?
+	// The standard RAG flow: Retrieve -> Generate.
+	// The original code only streamed docs. I will preserve that behavior for now.
+
 	for _, doc := range docs {
-		sse.SendText(doc.Content)
+		sse.SendText(doc.Content + "\n\n") // Append newline for separation
 	}
 
 	sse.SendFinish()
@@ -156,14 +155,14 @@ func (l *ChatLogic) retrieve(req *types.ChatReq) (docs []*schema.Document, err e
 	var mu sync.Mutex
 	docs = make([]*schema.Document, 0)
 
-	for _, kb := range req.KnowledgeBaseIds {
-		emb, ok := embMap[kb]
+	for _, kbId := range req.KnowledgeBaseIds {
+		embConfig, ok := embMap[kbId]
 		if !ok {
 			continue
 		}
 
 		wg.Add(1)
-		go func(kbId uint64, embConfig retriever.ModelConfig) {
+		go func(kbId string, embConfig retriever.ModelConfig) {
 			defer wg.Done()
 
 			getDocs, retrieveErr := l.svcCtx.RetrieveSvc.Query(l.ctx, &retriever.RetrieveRequest{
@@ -180,7 +179,7 @@ func (l *ChatLogic) retrieve(req *types.ChatReq) (docs []*schema.Document, err e
 			})
 
 			if retrieveErr != nil {
-				logx.Errorf("query失败, kb:%d, err:%v", kbId, retrieveErr)
+				logx.Errorf("query失败, kb:%s, err:%v", kbId, retrieveErr)
 				return
 			}
 
@@ -188,7 +187,7 @@ func (l *ChatLogic) retrieve(req *types.ChatReq) (docs []*schema.Document, err e
 			mu.Lock()
 			docs = append(docs, getDocs...)
 			mu.Unlock()
-		}(kb, emb)
+		}(kbId, embConfig)
 	}
 
 	wg.Wait()

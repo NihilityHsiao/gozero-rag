@@ -11,7 +11,9 @@ require (
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20251229121631-716047332ba5
 	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260108032612-f658a8b54235
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.6
+	github.com/elastic/go-elasticsearch/v8 v8.19.1
 	github.com/go-sql-driver/mysql v1.9.0
+	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
@@ -52,6 +54,7 @@ require (
 	github.com/dslipak/pdf v0.0.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eino-contrib/jsonschema v1.0.3 // indirect
+	github.com/elastic/elastic-transport-go/v8 v8.8.0 // indirect
 	github.com/evanphx/json-patch v0.5.2 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect

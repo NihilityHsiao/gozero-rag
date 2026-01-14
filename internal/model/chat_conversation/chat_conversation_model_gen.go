@@ -42,7 +42,7 @@ type (
 
 	ChatConversation struct {
 		Id           string    `db:"id"`            // 会话ID (UUID)
-		UserId       int64     `db:"user_id"`       // 用户ID
+		UserId       string    `db:"user_id"`       // 用户ID (UUID)
 		Title        string    `db:"title"`         // 会话标题
 		Status       int64     `db:"status"`        // 状态: 1-正常, 2-归档, 3-删除
 		MessageCount int64     `db:"message_count"` // 消息数量

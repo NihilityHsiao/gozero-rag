@@ -21,20 +21,20 @@ import (
 var (
 	userFieldNames          = builder.RawFieldNames(&User{})
 	userRows                = strings.Join(userFieldNames, ",")
-	userRowsExpectAutoSet   = strings.Join(stringx.Remove(userFieldNames, "`id`", "`create_at`", "`create_time`", "`created_at`", "`update_at`", "`update_time`", "`updated_at`"), ",")
+	userRowsExpectAutoSet   = strings.Join(stringx.Remove(userFieldNames, "`create_at`", "`create_time`", "`created_at`", "`update_at`", "`update_time`", "`updated_at`"), ",")
 	userRowsWithPlaceHolder = strings.Join(stringx.Remove(userFieldNames, "`id`", "`create_at`", "`create_time`", "`created_at`", "`update_at`", "`update_time`", "`updated_at`"), "=?,") + "=?"
 
-	cacheUserIdPrefix       = "cache:user:id:"
-	cacheUserUsernamePrefix = "cache:user:username:"
+	cacheUserIdPrefix    = "cache:user:id:"
+	cacheUserEmailPrefix = "cache:user:email:"
 )
 
 type (
 	userModel interface {
 		Insert(ctx context.Context, data *User) (sql.Result, error)
-		FindOne(ctx context.Context, id int64) (*User, error)
-		FindOneByUsername(ctx context.Context, username string) (*User, error)
+		FindOne(ctx context.Context, id string) (*User, error)
+		FindOneByEmail(ctx context.Context, email string) (*User, error)
 		Update(ctx context.Context, data *User) error
-		Delete(ctx context.Context, id int64) error
+		Delete(ctx context.Context, id string) error
 	}
 
 	defaultUserModel struct {
@@ -43,12 +43,23 @@ type (
 	}
 
 	User struct {
-		Id           int64     `db:"id"`            // 用户唯一标识，自增主键
-		Username     string    `db:"username"`      // 用户名，用于登录，唯一
-		PasswordHash string    `db:"password_hash"` // 密码哈希值，存储加密后的密码
-		Email        string    `db:"email"`         // 用户邮箱地址
-		CreatedAt    time.Time `db:"created_at"`    // 创建时间
-		UpdatedAt    time.Time `db:"updated_at"`    // 更新时间
+		Id            string         `db:"id"`              // 用户ID, UUID
+		Nickname      string         `db:"nickname"`        // 昵称
+		Password      string         `db:"password"`        // 密码
+		Email         string         `db:"email"`           // 邮箱
+		Avatar        sql.NullString `db:"avatar"`          // 头像base64字符串
+		Language      string         `db:"language"`        // 语言: English|Chinese
+		ColorSchema   string         `db:"color_schema"`    // 主题: Bright|Dark
+		Timezone      string         `db:"timezone"`        // 时区
+		LastLoginTime sql.NullTime   `db:"last_login_time"` // 最后登录时间
+		IsActive      int64          `db:"is_active"`       // 是否激活,核心业务开关,只允许值为1的用户登录
+		LoginChannel  sql.NullString `db:"login_channel"`   // 登录渠道
+		Status        int64          `db:"status"`          // 状态: 0-废弃, 1-有效
+		IsSuperuser   int64          `db:"is_superuser"`    // 是否超级管理员
+		CreatedTime   int64          `db:"created_time"`    // 创建时间戳(ms)
+		UpdatedTime   int64          `db:"updated_time"`    // 更新时间戳(ms)
+		CreatedDate   time.Time      `db:"created_date"`    // 创建日期
+		UpdatedDate   time.Time      `db:"updated_date"`    // 更新日期
 	}
 )
 
@@ -59,22 +70,22 @@ func newUserModel(conn sqlx.SqlConn, c cache.CacheConf, opts ...cache.Option) *d
 	}
 }
 
-func (m *defaultUserModel) Delete(ctx context.Context, id int64) error {
+func (m *defaultUserModel) Delete(ctx context.Context, id string) error {
 	data, err := m.FindOne(ctx, id)
 	if err != nil {
 		return err
 	}
 
+	userEmailKey := fmt.Sprintf("%s%v", cacheUserEmailPrefix, data.Email)
 	userIdKey := fmt.Sprintf("%s%v", cacheUserIdPrefix, id)
-	userUsernameKey := fmt.Sprintf("%s%v", cacheUserUsernamePrefix, data.Username)
 	_, err = m.ExecCtx(ctx, func(ctx context.Context, conn sqlx.SqlConn) (result sql.Result, err error) {
 		query := fmt.Sprintf("delete from %s where `id` = ?", m.table)
 		return conn.ExecCtx(ctx, query, id)
-	}, userIdKey, userUsernameKey)
+	}, userEmailKey, userIdKey)
 	return err
 }
 
-func (m *defaultUserModel) FindOne(ctx context.Context, id int64) (*User, error) {
+func (m *defaultUserModel) FindOne(ctx context.Context, id string) (*User, error) {
 	userIdKey := fmt.Sprintf("%s%v", cacheUserIdPrefix, id)
 	var resp User
 	err := m.QueryRowCtx(ctx, &resp, userIdKey, func(ctx context.Context, conn sqlx.SqlConn, v any) error {
@@ -91,12 +102,12 @@ func (m *defaultUserModel) FindOne(ctx context.Context, id int64) (*User, error)
 	}
 }
 
-func (m *defaultUserModel) FindOneByUsername(ctx context.Context, username string) (*User, error) {
-	userUsernameKey := fmt.Sprintf("%s%v", cacheUserUsernamePrefix, username)
+func (m *defaultUserModel) FindOneByEmail(ctx context.Context, email string) (*User, error) {
+	userEmailKey := fmt.Sprintf("%s%v", cacheUserEmailPrefix, email)
 	var resp User
-	err := m.QueryRowIndexCtx(ctx, &resp, userUsernameKey, m.formatPrimary, func(ctx context.Context, conn sqlx.SqlConn, v any) (i any, e error) {
-		query := fmt.Sprintf("select %s from %s where `username` = ? limit 1", userRows, m.table)
-		if err := conn.QueryRowCtx(ctx, &resp, query, username); err != nil {
+	err := m.QueryRowIndexCtx(ctx, &resp, userEmailKey, m.formatPrimary, func(ctx context.Context, conn sqlx.SqlConn, v any) (i any, e error) {
+		query := fmt.Sprintf("select %s from %s where `email` = ? limit 1", userRows, m.table)
+		if err := conn.QueryRowCtx(ctx, &resp, query, email); err != nil {
 			return nil, err
 		}
 		return resp.Id, nil
@@ -112,27 +123,51 @@ func (m *defaultUserModel) FindOneByUsername(ctx context.Context, username strin
 }
 
 func (m *defaultUserModel) Insert(ctx context.Context, data *User) (sql.Result, error) {
+	// --------------------------------------------------------------------------------
+	// [AUTO-FILL] 自动填充时间 (NOT NULL 版本)
+	// --------------------------------------------------------------------------------
+	now := time.Now()
+	nowUnix := now.UnixMilli()
+	// 直接赋值 int64，不需要 sql.NullInt64
+	data.CreatedTime = nowUnix
+	data.UpdatedTime = nowUnix
+
+	// 直接赋值 time.Time，不需要 sql.NullTime
+	data.CreatedDate = now
+	data.UpdatedDate = now
+	// --------------------------------------------------------------------------------
+
+	userEmailKey := fmt.Sprintf("%s%v", cacheUserEmailPrefix, data.Email)
 	userIdKey := fmt.Sprintf("%s%v", cacheUserIdPrefix, data.Id)
-	userUsernameKey := fmt.Sprintf("%s%v", cacheUserUsernamePrefix, data.Username)
 	ret, err := m.ExecCtx(ctx, func(ctx context.Context, conn sqlx.SqlConn) (result sql.Result, err error) {
-		query := fmt.Sprintf("insert into %s (%s) values (?, ?, ?)", m.table, userRowsExpectAutoSet)
-		return conn.ExecCtx(ctx, query, data.Username, data.PasswordHash, data.Email)
-	}, userIdKey, userUsernameKey)
+		query := fmt.Sprintf("insert into %s (%s) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", m.table, userRowsExpectAutoSet)
+		return conn.ExecCtx(ctx, query, data.Id, data.Nickname, data.Password, data.Email, data.Avatar, data.Language, data.ColorSchema, data.Timezone, data.LastLoginTime, data.IsActive, data.LoginChannel, data.Status, data.IsSuperuser, data.CreatedTime, data.UpdatedTime, data.CreatedDate, data.UpdatedDate)
+	}, userEmailKey, userIdKey)
 	return ret, err
 }
 
 func (m *defaultUserModel) Update(ctx context.Context, newData *User) error {
+	// --------------------------------------------------------------------------------
+	// [AUTO-FILL] 自动更新时间 (NOT NULL 版本)
+	// --------------------------------------------------------------------------------
+	now := time.Now()
+
+	// 直接赋值，Update 操作只需更新 update_xxx 字段
+	newData.UpdatedTime = now.UnixMilli()
+	newData.UpdatedDate = now
+	// --------------------------------------------------------------------------------
+
 	data, err := m.FindOne(ctx, newData.Id)
 	if err != nil {
 		return err
 	}
 
+	userEmailKey := fmt.Sprintf("%s%v", cacheUserEmailPrefix, data.Email)
 	userIdKey := fmt.Sprintf("%s%v", cacheUserIdPrefix, data.Id)
-	userUsernameKey := fmt.Sprintf("%s%v", cacheUserUsernamePrefix, data.Username)
 	_, err = m.ExecCtx(ctx, func(ctx context.Context, conn sqlx.SqlConn) (result sql.Result, err error) {
 		query := fmt.Sprintf("update %s set %s where `id` = ?", m.table, userRowsWithPlaceHolder)
-		return conn.ExecCtx(ctx, query, newData.Username, newData.PasswordHash, newData.Email, newData.Id)
-	}, userIdKey, userUsernameKey)
+		return conn.ExecCtx(ctx, query, newData.Nickname, newData.Password, newData.Email, newData.Avatar, newData.Language, newData.ColorSchema, newData.Timezone, newData.LastLoginTime, newData.IsActive, newData.LoginChannel, newData.Status, newData.IsSuperuser, newData.CreatedTime, newData.UpdatedTime, newData.CreatedDate, newData.UpdatedDate, newData.Id)
+	}, userEmailKey, userIdKey)
 	return err
 }
 

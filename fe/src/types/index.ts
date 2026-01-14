@@ -1,13 +1,24 @@
+// 用户基本信息
 export interface UserInfo {
-  user_id: number;
-  username: string;
+  user_id: string;      // UUID v7
+  nickname: string;
+  email: string;
+  avatar?: string;
+  language?: string;
 }
 
+// JWT Token
 export interface JwtToken {
-  access_token: string;
-  refresh_token: string;
-  expire_at: number;
-  uid: number;
+  access_token: string;     // 核心访问令牌
+  refresh_token: string;    // 刷新令牌
+  expire_at: number;        // access token过期时间
+}
+
+// 租户基本信息
+export interface TenantInfo {
+  tenant_id: string;
+  name: string;
+  role: string;             // owner|admin|member
 }
 
 export interface KnowledgeBaseModelIdsInfo {
@@ -17,20 +28,27 @@ export interface KnowledgeBaseModelIdsInfo {
 }
 
 export interface KnowledgeBaseInfo {
-  id: number;
+  id: string;
   name: string;
   description: string;
   avatar?: string;
   embedding_model?: string;
+  embd_id: string;
   status: number; // 0-disabled, 1-enabled
   embedding_model_id: number;
   model_ids: KnowledgeBaseModelIdsInfo[];
+  permission: string; // me | team
+  created_by: string; // 创建者用户ID
   created_at: string;
   updated_at: string;
   qa_model_id?: number;
   chat_model_id?: number;
   rerank_model_id?: number;
   rewrite_model_id?: number;
+  parser_id: string;
+  parser_config: string;
+  similarity_threshold: number;
+  vector_similarity_weight: number;
 }
 
 export interface GetKnowledgeBaseListReq {
@@ -47,15 +65,11 @@ export interface GetKnowledgeBaseListResp {
 export interface CreateKnowledgeBaseReq {
   name: string;
   description?: string;
-  embedding_id: number;
-  rerank_id?: number;
-  rewrite_id?: number;
-  qa_id?: number;
-  chat_id?: number;
+  embd_id: string; // 格式: 模型名称@厂商
 }
 
 export interface CreateKnowledgeBaseResp {
-  id: number;
+  id: string;
 }
 
 export interface UpdateKnowledgeBaseReq {
@@ -63,29 +77,60 @@ export interface UpdateKnowledgeBaseReq {
   description?: string;
   avatar?: string;
   status?: number;
+  permission?: string;
   qa_model_id?: number;
   chat_model_id?: number;
   embedding_model_id?: number;
   rerank_model_id?: number;
   rewrite_model_id?: number;
+  parser_id?: string;
+  parser_config?: string; // JSON string
+  similarity_threshold?: number;
+  vector_similarity_weight?: number;
 }
 
+// Parser ID Enum
+export type ParserId = 'general' | 'resume';
+
+// General Parser Config
+export interface GeneralParserConfig {
+  chunk_token_num: number;
+  chunk_overlap_token_num: number;
+  separator: string[];
+  layout_recognize: boolean;
+  pdf_parser: 'pdfcpu' | 'eino' | 'deepdoc';
+}
+
+// Resume Parser Config
+export interface ResumeParserConfig {
+  pdf_parser: 'pdfcpu' | 'eino' | 'deepdoc';
+}
+
+// Unified Config Type
+export type ParserConfig = GeneralParserConfig | ResumeParserConfig;
+
 // Document related types
-export type DocStatus = 'disable' | 'pending' | 'indexing' | 'enable' | 'fail';
+// run_status 状态类型
+export type RunStatus = 'pending' | 'indexing' | 'success' | 'failed' | 'canceled' | 'paused';
 
 export interface KnowledgeDocumentInfo {
-  id: number;
-  knowledge_base_id: number;
+  id: string;
+  knowledge_base_id: string;
   doc_name: string;
-  doc_type: string; // pdf/word/txt
+  doc_type: string; // pdf/word/txt/md
   doc_size: number;
+  storage_path: string;
   description: string;
-  status: DocStatus; // disable, pending, enable, fail
-  chunk_count: number;
-  parser_config?: SegmentationSettings;
-  err_msg: string;
-  created_at: string;
-  updated_at: string;
+  status: number; // 1-启用, 0-禁用
+  run_status: RunStatus; // 文档处理状态
+  chunk_num: number; // 切片数量
+  token_num: number; // token数量
+  parser_config: string; // JSON string
+  progress: number; // 处理进度 0-100
+  progress_msg: string; // 进度信息
+  created_by: string;
+  created_time: number; // 时间戳(毫秒)
+  updated_time: number; // 时间戳(毫秒)
 }
 
 export interface GetKnowledgeDocumentListReq {
@@ -121,7 +166,7 @@ export interface ChunkMetadata {
 
 export interface KnowledgeDocumentChunkInfo {
   id: string;
-  knowledge_base_id: number;
+  knowledge_base_id: string;
   knowledge_document_id: string;
   chunk_text: string;
   chunk_size: number;
@@ -132,7 +177,7 @@ export interface KnowledgeDocumentChunkInfo {
 }
 
 export interface GetKnowledgeDocumentChunksReq {
-  knowledge_base_id: number;
+  knowledge_base_id: string;
   document_id: string;
   page?: number;
   page_size?: number;
@@ -145,13 +190,13 @@ export interface GetKnowledgeDocumentChunksResp {
 }
 
 export interface GetDocByDocIdReq {
-  knowledge_base_id: number;
+  knowledge_base_id: string;
   doc_id: string;
 }
 
 export interface UserApiInfo {
   id: number;
-  user_id: number;
+  user_id: string;
   config_name: string;
   api_key: string;
   base_url: string;
@@ -166,6 +211,8 @@ export interface UserApiInfo {
   is_default: number;
   created_at: string;
   updated_at: string;
+  provider: string;
+  icon: string;
 }
 
 export interface GetUserApiListReq {
@@ -248,3 +295,6 @@ export interface ProcessFilesReq {
 export interface ProcessFilesResp {
   job_id: string;
 }
+
+// LLM 相关类型
+export * from './llm';

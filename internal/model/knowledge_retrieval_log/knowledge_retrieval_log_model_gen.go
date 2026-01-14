@@ -37,16 +37,15 @@ type (
 	}
 
 	KnowledgeRetrievalLog struct {
-		Id              uint64         `db:"id"`
-		UserId          int64          `db:"user_id"`           // 用户唯一标识
-		KnowledgeBaseId uint64         `db:"knowledge_base_id"` // 知识库ID
-		Query           string         `db:"query"`             // 用户原始查询
-		RetrievalMode   string         `db:"retrieval_mode"`    // 检索模式 vector/fulltext/hybrid
-		RetrievalParams sql.NullString `db:"retrieval_params"`  // 检索参数快照(阈值/权重等)
-		ChunkCount      int64          `db:"chunk_count"`       // 召回chunk数
-		TimeCostMs      int64          `db:"time_cost_ms"`      // 查询耗时(ms)
-		CreatedAt       time.Time      `db:"created_at"`
-		UpdatedAt       time.Time      `db:"updated_at"`
+		Id              uint64         `db:"id"`                // 主键ID
+		KnowledgeBaseId string         `db:"knowledge_base_id"` // 知识库ID (UUID)
+		UserId          string         `db:"user_id"`           // 用户ID (UUID)
+		Query           string         `db:"query"`             // 用户查询
+		RetrievalMode   string         `db:"retrieval_mode"`    // 召回模式: vector, fulltext, hybrid
+		RetrievalParams sql.NullString `db:"retrieval_params"`  // 召回参数快照
+		ChunkCount      int64          `db:"chunk_count"`       // 召回片段数量
+		TimeCostMs      int64          `db:"time_cost_ms"`      // 耗时(ms)
+		CreatedAt       time.Time      `db:"created_at"`        // 创建时间
 	}
 )
 
@@ -79,13 +78,13 @@ func (m *defaultKnowledgeRetrievalLogModel) FindOne(ctx context.Context, id uint
 
 func (m *defaultKnowledgeRetrievalLogModel) Insert(ctx context.Context, data *KnowledgeRetrievalLog) (sql.Result, error) {
 	query := fmt.Sprintf("insert into %s (%s) values (?, ?, ?, ?, ?, ?, ?)", m.table, knowledgeRetrievalLogRowsExpectAutoSet)
-	ret, err := m.conn.ExecCtx(ctx, query, data.UserId, data.KnowledgeBaseId, data.Query, data.RetrievalMode, data.RetrievalParams, data.ChunkCount, data.TimeCostMs)
+	ret, err := m.conn.ExecCtx(ctx, query, data.KnowledgeBaseId, data.UserId, data.Query, data.RetrievalMode, data.RetrievalParams, data.ChunkCount, data.TimeCostMs)
 	return ret, err
 }
 
 func (m *defaultKnowledgeRetrievalLogModel) Update(ctx context.Context, data *KnowledgeRetrievalLog) error {
 	query := fmt.Sprintf("update %s set %s where `id` = ?", m.table, knowledgeRetrievalLogRowsWithPlaceHolder)
-	_, err := m.conn.ExecCtx(ctx, query, data.UserId, data.KnowledgeBaseId, data.Query, data.RetrievalMode, data.RetrievalParams, data.ChunkCount, data.TimeCostMs, data.Id)
+	_, err := m.conn.ExecCtx(ctx, query, data.KnowledgeBaseId, data.UserId, data.Query, data.RetrievalMode, data.RetrievalParams, data.ChunkCount, data.TimeCostMs, data.Id)
 	return err
 }
 

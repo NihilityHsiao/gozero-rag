@@ -7,9 +7,13 @@ import (
 	"net/http"
 
 	chat "gozero-rag/restful/rag/internal/handler/chat"
-	knowledge "gozero-rag/restful/rag/internal/handler/knowledge"
+	knowledge_base "gozero-rag/restful/rag/internal/handler/knowledge_base"
+	knowledge_document "gozero-rag/restful/rag/internal/handler/knowledge_document"
+	llm_factories "gozero-rag/restful/rag/internal/handler/llm_factories"
 	login "gozero-rag/restful/rag/internal/handler/login"
 	retrieval "gozero-rag/restful/rag/internal/handler/retrieval"
+	team "gozero-rag/restful/rag/internal/handler/team"
+	tenant_llm "gozero-rag/restful/rag/internal/handler/tenant_llm"
 	user "gozero-rag/restful/rag/internal/handler/user"
 	"gozero-rag/restful/rag/internal/svc"
 
@@ -71,82 +75,102 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
 		[]rest.Route{
 			{
-				// 创建知识库
-				Method:  http.MethodPost,
-				Path:    "/knowledge",
-				Handler: knowledge.CreateKnowledgeBaseHandler(serverCtx),
+				// 获取知识库详情
+				Method:  http.MethodGet,
+				Path:    "/:id",
+				Handler: knowledge_base.GetKnowledgeBaseHandler(serverCtx),
+			},
+			{
+				// 更新知识库
+				Method:  http.MethodPut,
+				Path:    "/:id",
+				Handler: knowledge_base.UpdateKnowledgeBaseHandler(serverCtx),
 			},
 			{
 				// 删除知识库
 				Method:  http.MethodDelete,
-				Path:    "/knowledge/:knowledge_base_id",
-				Handler: knowledge.DeleteKnowledgeBaseHandler(serverCtx),
+				Path:    "/:id",
+				Handler: knowledge_base.DeleteKnowledgeBaseHandler(serverCtx),
 			},
 			{
-				// 获取知识库详情
-				Method:  http.MethodGet,
-				Path:    "/knowledge/:knowledge_base_id",
-				Handler: knowledge.GetKnowledgeBaseInfoHandler(serverCtx),
+				// 更新知识库权限
+				Method:  http.MethodPatch,
+				Path:    "/:id/permission",
+				Handler: knowledge_base.UpdateKnowledgeBasePermissionHandler(serverCtx),
 			},
 			{
-				// 修改知识库(描述信息、启用或禁用状态、知识库名称）
-				Method:  http.MethodPut,
-				Path:    "/knowledge/:knowledge_base_id",
-				Handler: knowledge.UpdateKnowledgeBaseHandler(serverCtx),
-			},
-			{
-				// 获取指定知识库、指定文档的所有分片
-				Method:  http.MethodGet,
-				Path:    "/knowledge/:knowledge_base_id/:document_id/chunks",
-				Handler: knowledge.GetKnowledgeDocumentChunksHandler(serverCtx),
-			},
-			{
-				// 删除知识库的所有文档(状态不是indexing的都删掉）
-				Method:  http.MethodDelete,
-				Path:    "/knowledge/:knowledge_base_id/all",
-				Handler: knowledge.DeleteAllDocsHandler(serverCtx),
-			},
-			{
-				// 保存分片配置
+				// 创建知识库
 				Method:  http.MethodPost,
-				Path:    "/knowledge/:knowledge_base_id/document/chunk/save",
-				Handler: knowledge.SaveChunkSettingsHandler(serverCtx),
-			},
-			{
-				// 查看分片效果
-				Method:  http.MethodPost,
-				Path:    "/knowledge/:knowledge_base_id/document/preview",
-				Handler: knowledge.PreviewChunkHandler(serverCtx),
-			},
-			{
-				// 获取指定文档的信息
-				Method:  http.MethodGet,
-				Path:    "/knowledge/:knowledge_base_id/get_document/:doc_id",
-				Handler: knowledge.GetDocByDocIdHandler(serverCtx),
-			},
-			{
-				// 根据知识库id,获取知识库的文档列表
-				Method:  http.MethodGet,
-				Path:    "/knowledge/:knowledge_base_id/list",
-				Handler: knowledge.GetKnowledgeDocumentListHandler(serverCtx),
-			},
-			{
-				// 上传 pdf/txt/docx 文件到指定知识库，使用 multipart/form-data，文件字段名: file
-				Method:  http.MethodPost,
-				Path:    "/knowledge/:knowledge_base_id/upload",
-				Handler: knowledge.UploadFileHandler(serverCtx),
-			},
-			{
-				// 上传多个文件到指定知识库 ，文件字段名: files
-				Method:  http.MethodPost,
-				Path:    "/knowledge/:knowledge_base_id/uploadmulti",
-				Handler: knowledge.UploadMultiFileHandler(serverCtx),
+				Path:    "/create",
+				Handler: knowledge_base.CreateKnowledgeBaseHandler(serverCtx),
 			},
 			{
 				// 获取知识库列表
 				Method:  http.MethodGet,
-				Path:    "/knowledge/list",
-				Handler: knowledge.GetKnowledgeBaseListHandler(serverCtx),
+				Path:    "/list",
+				Handler: knowledge_base.ListKnowledgeBaseHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/v1/knowledge"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				// 获取文档列表
+				Method:  http.MethodGet,
+				Path:    "/knowledge_document",
+				Handler: knowledge_document.ListKnowledgeDocumentHandler(serverCtx),
+			},
+			{
+				// 获取文档详情
+				Method:  http.MethodGet,
+				Path:    "/knowledge_document/:id",
+				Handler: knowledge_document.GetKnowledgeDocumentHandler(serverCtx),
+			},
+			{
+				// 删除文档
+				Method:  http.MethodDelete,
+				Path:    "/knowledge_document/:id",
+				Handler: knowledge_document.DeleteKnowledgeDocumentHandler(serverCtx),
+			},
+			{
+				// 更新文档解析配置
+				Method:  http.MethodPut,
+				Path:    "/knowledge_document/:id/parser_config",
+				Handler: knowledge_document.UpdateDocumentParserConfigHandler(serverCtx),
+			},
+			{
+				// 重试/重新解析文档
+				Method:  http.MethodPost,
+				Path:    "/knowledge_document/:id/retry",
+				Handler: knowledge_document.RetryDocumentHandler(serverCtx),
+			},
+			{
+				// 批量解析文档
+				Method:  http.MethodPost,
+				Path:    "/knowledge_document/batch_parse",
+				Handler: knowledge_document.BatchParseDocumentHandler(serverCtx),
+			},
+			{
+				// 上传文档
+				Method:  http.MethodPost,
+				Path:    "/knowledge_document/upload",
+				Handler: knowledge_document.UploadDocumentHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/v1"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				// 获取系统支持的LLM厂商列表
+				Method:  http.MethodGet,
+				Path:    "/llm/factories",
+				Handler: llm_factories.ListLlmFactoriesHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
@@ -182,6 +206,80 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/retrieval/log/:knowledge_base_id",
 				Handler: retrieval.GetRetrievalLogHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/v1"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				// 发起邀请
+				Method:  http.MethodPost,
+				Path:    "/team/invite",
+				Handler: team.CreateInviteHandler(serverCtx),
+			},
+			{
+				// 验证邀请码信息
+				Method:  http.MethodGet,
+				Path:    "/team/invite/:code",
+				Handler: team.VerifyInviteHandler(serverCtx),
+			},
+			{
+				// 使用邀请码加入团队
+				Method:  http.MethodPost,
+				Path:    "/team/join",
+				Handler: team.JoinTeamHandler(serverCtx),
+			},
+			{
+				// 获取我加入的团队列表
+				Method:  http.MethodGet,
+				Path:    "/team/joined",
+				Handler: team.ListJoinedTeamsHandler(serverCtx),
+			},
+			{
+				// 获取当前团队成员列表
+				Method:  http.MethodGet,
+				Path:    "/team/members",
+				Handler: team.ListMembersHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/v1"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				// 批量添加租户LLM配置
+				Method:  http.MethodPost,
+				Path:    "/tenant/llm",
+				Handler: tenant_llm.AddTenantLlmHandler(serverCtx),
+			},
+			{
+				// 获取租户LLM配置列表
+				Method:  http.MethodGet,
+				Path:    "/tenant/llm",
+				Handler: tenant_llm.ListTenantLlmHandler(serverCtx),
+			},
+			{
+				// 更新租户LLM配置
+				Method:  http.MethodPut,
+				Path:    "/tenant/llm/:id",
+				Handler: tenant_llm.UpdateTenantLlmHandler(serverCtx),
+			},
+			{
+				// 删除租户LLM配置
+				Method:  http.MethodDelete,
+				Path:    "/tenant/llm/:id",
+				Handler: tenant_llm.DeleteTenantLlmHandler(serverCtx),
+			},
+			{
+				// 获取租户LLM配置列表(按厂商分组)
+				Method:  http.MethodGet,
+				Path:    "/tenant/llm/grouped",
+				Handler: tenant_llm.ListTenantLlmGroupedHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

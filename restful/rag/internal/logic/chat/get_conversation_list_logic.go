@@ -5,7 +5,6 @@ package chat
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"gozero-rag/internal/xerr"
@@ -33,7 +32,7 @@ func NewGetConversationListLogic(ctx context.Context, svcCtx *svc.ServiceContext
 
 func (l *GetConversationListLogic) GetConversationList(req *types.GetConversationListReq) (resp *types.GetConversationListResp, err error) {
 	userId, _ := common.GetUidFromCtx(l.ctx)
-	list, total, err := l.svcCtx.ChatConversationModel.FindListByUserId(l.ctx, strconv.FormatInt(userId, 10), req.Page, req.PageSize)
+	list, total, err := l.svcCtx.ChatConversationModel.FindListByUserId(l.ctx, userId, req.Page, req.PageSize)
 	if err != nil {
 		l.Logger.Errorf("FindListByUserId error: %v, userId: %s", err, userId)
 		return nil, xerr.NewErrCodeMsg(xerr.ServerCommonError, "Failed to get conversation list")

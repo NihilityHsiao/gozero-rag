@@ -45,3 +45,9 @@ KqPusherConf:
   Brokers:
     - localhost:9092
   Topic: prod.rag.knowledge.document.index # 索引文件
+
+ElasticSearch:
+  Addresses:
+    - "http://localhost:9200"
+  Username: ""
+  Password: ""

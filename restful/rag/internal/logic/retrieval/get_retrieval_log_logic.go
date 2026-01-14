@@ -41,14 +41,14 @@ func (l *GetRetrievalLogLogic) GetRetrievalLog(req *types.GetRetrieveLogReq) (re
 	}
 
 	// 1. Get List with Limit/Offset
-	logs, err := l.svcCtx.KnowledgeRetrievalLogModel.FindLogList(l.ctx, req.KnowledgeBaseId, uint64(userId), offset, req.PageSize)
+	logs, err := l.svcCtx.KnowledgeRetrievalLogModel.FindLogList(l.ctx, req.KnowledgeBaseId, userId, offset, req.PageSize)
 	if err != nil {
 		l.Logger.Errorf("Failed to get retrieval logs: %v", err)
 		return nil, xerr.NewInternalErrMsg("获取召回记录失败")
 	}
 
 	// 2. Count Total
-	total, err := l.svcCtx.KnowledgeRetrievalLogModel.CountLog(l.ctx, req.KnowledgeBaseId, uint64(userId))
+	total, err := l.svcCtx.KnowledgeRetrievalLogModel.CountLog(l.ctx, req.KnowledgeBaseId, userId)
 	if err != nil {
 		l.Logger.Errorf("Failed to count retrieval logs: %v", err)
 	}

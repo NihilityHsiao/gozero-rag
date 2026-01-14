@@ -1,0 +1,94 @@
+syntax = "v1"
+import "./common.api"
+
+type (
+    // 团队成员信息
+    TeamMember {
+        UserId     string `json:"user_id"`
+        Nickname   string `json:"nickname"`
+        Email      string `json:"email"`
+        Role       string `json:"role"`        // owner | admin | member
+        Status     int64  `json:"status"`      // 1-有效, 0-禁用
+        JoinedTime int64  `json:"joined_time"` // 加入时间戳(ms)
+    }
+
+    // 获取成员列表响应
+    ListMembersResp {
+        List []TeamMember `json:"list"`
+    }
+
+    // 我加入的团队信息
+    JoinedTeam {
+        TenantId   string `json:"tenant_id"`
+        TenantName string `json:"tenant_name"`
+        OwnerName  string `json:"owner_name"`
+        Role       string `json:"role"`
+        JoinedTime int64  `json:"joined_time"`
+    }
+
+    // 获取加入团队列表响应
+    ListJoinedTeamsResp {
+        List []JoinedTeam `json:"list"`
+    }
+
+    // 邀请请求
+    CreateInviteReq {
+        Email string `json:"email"` // 被邀请人邮箱
+    }
+
+    // 邀请响应
+    CreateInviteResp {
+        InviteCode string `json:"invite_code"` // 邀请码
+        InviteLink string `json:"invite_link"` // 邀请链接
+    }
+
+    // 验证邀请码请求
+    VerifyInviteReq {
+        Code string `path:"code"` // 邀请码
+    }
+
+    // 验证邀请码响应
+    VerifyInviteResp {
+        TenantId   string `json:"tenant_id"`   // 租户ID
+        TenantName string `json:"tenant_name"` // 租户名称
+        Inviter    string `json:"inviter"`     // 邀请人昵称
+    }
+
+    // 加入团队请求
+    JoinTeamReq {
+        InviteCode string `json:"invite_code"` // 邀请码
+    }
+
+    // 加入团队响应
+    JoinTeamResp {
+        Success bool `json:"success"`
+    }
+)
+
+@server (
+    jwt: Auth
+    tags: "团队管理"
+    prefix: /v1
+    group: team
+)
+service rag {
+    @doc "获取当前团队成员列表"
+    @handler listMembers
+    get /team/members returns (ListMembersResp)
+
+    @doc "获取我加入的团队列表"
+    @handler listJoinedTeams
+    get /team/joined returns (ListJoinedTeamsResp)
+
+    @doc "发起邀请"
+    @handler createInvite
+    post /team/invite (CreateInviteReq) returns (CreateInviteResp)
+
+    @doc "验证邀请码信息"
+    @handler verifyInvite
+    get /team/invite/:code (VerifyInviteReq) returns (VerifyInviteResp)
+
+    @doc "使用邀请码加入团队"
+    @handler joinTeam
+    post /team/join (JoinTeamReq) returns (JoinTeamResp)
+}

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getDocumentList } from '@/api/document';
+import { getDocumentList, batchParseDocument } from '@/api/document';
 import { clearDatasetDocuments } from '@/api/dataset';
-import type { KnowledgeDocumentInfo, DocStatus } from '@/types';
+import type { KnowledgeDocumentInfo, RunStatus } from '@/types';
 import {
   Table,
   TableBody,
@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Tooltip,
   TooltipContent,
@@ -39,7 +40,8 @@ import {
   AlertCircle,
   File,
   Loader2,
-  Trash2
+  Trash2,
+  Play
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -55,18 +57,24 @@ export default function DocumentList() {
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
 
+  // Batch Selection State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [parsing, setParsing] = useState(false);
+
   const fetchDocs = async () => {
     if (!id) return;
     setLoading(true);
     try {
       // Note: Backend currently doesn't support keyword search in this API, 
       // but we prepare the UI for it.
-      const res = await getDocumentList(Number(id), {
+      const res = await getDocumentList(id, {
         page,
         page_size: 10,
       });
       setList(res.list || []);
       setTotal(res.total);
+      // Clear selection on page change or refresh
+      setSelectedIds(new Set());
     } catch (error) {
       console.error('Failed to fetch documents', error);
       toast.error('Failed to load documents');
@@ -83,7 +91,7 @@ export default function DocumentList() {
     if (!id) return;
     setClearing(true);
     try {
-      await clearDatasetDocuments(Number(id));
+      await clearDatasetDocuments(id);
       toast.success('文档已清空');
       setClearDialogOpen(false);
       setPage(1);
@@ -96,6 +104,64 @@ export default function DocumentList() {
     }
   };
 
+  const handleBatchParse = async () => {
+    if (!id || selectedIds.size === 0) return;
+    setParsing(true);
+    try {
+      await batchParseDocument(id, Array.from(selectedIds));
+      toast.success('Batch parse task submitted');
+      // Optimistic update
+      setList(prev => prev.map(doc => {
+        if (selectedIds.has(doc.id)) {
+          return { ...doc, run_status: 'pending' };
+        }
+        return doc;
+      }));
+      setSelectedIds(new Set()); // Clear selection
+    } catch (error) {
+      console.error('Batch parse failed', error);
+      toast.error('Failed to submit batch parse task');
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleParseOne = async (e: React.MouseEvent, docId: string) => {
+    e.stopPropagation();
+    if (!id) return;
+    try {
+      await batchParseDocument(id, [docId]);
+      toast.success('Parse task submitted');
+      setList(prev => prev.map(doc => {
+        if (doc.id === docId) {
+          return { ...doc, run_status: 'pending' };
+        }
+        return doc;
+      }));
+    } catch (error) {
+      console.error('Parse failed', error);
+      toast.error('Failed to submit parse task');
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === list.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(list.map(d => d.id)));
+    }
+  };
+
+  const toggleSelectOne = (docId: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(docId)) {
+      newSet.delete(docId);
+    } else {
+      newSet.add(docId);
+    }
+    setSelectedIds(newSet);
+  };
+
   // Format bytes to readable string
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -105,55 +171,70 @@ export default function DocumentList() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Status Badge Helper
-  const getStatusBadge = (status: DocStatus, errMsg?: string) => {
+  // 格式化时间戳（毫秒）为可读字符串
+  const formatTime = (timestamp: number) => {
+    if (!timestamp) return '-';
+    const date = new Date(timestamp);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // Status Badge Helper - 使用 run_status
+  const getStatusBadge = (runStatus: RunStatus, progressMsg?: string) => {
     const styles = {
-      enable: 'bg-green-100 text-green-700 hover:bg-green-100 border-green-200',
+      success: 'bg-green-100 text-green-700 hover:bg-green-100 border-green-200',
       indexing: 'bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200',
       pending: 'bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200',
-      disable: 'bg-gray-50 text-gray-400 hover:bg-gray-50 border-gray-200',
-      fail: 'bg-red-50 text-red-600 hover:bg-red-50 border-red-200 cursor-pointer',
+      paused: 'bg-yellow-50 text-yellow-700 hover:bg-yellow-50 border-yellow-200',
+      failed: 'bg-red-50 text-red-600 hover:bg-red-50 border-red-200 cursor-pointer',
+      canceled: 'bg-gray-50 text-gray-400 hover:bg-gray-50 border-gray-200',
     };
 
     const statusMap: Record<string, string> = {
-      enable: '启用',
+      success: '已完成',
       indexing: '索引中',
       pending: '等待中',
-      disable: '禁用',
-      fail: '失败',
+      paused: '暂停',
+      failed: '失败',
+      canceled: '已取消',
     }
 
-    const label = statusMap[status] || status;
+    const label = statusMap[runStatus] || runStatus;
 
-    if (status === 'fail' && errMsg) {
+    if (runStatus === 'failed' && progressMsg) {
       return (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger>
-              <Badge variant="outline" className={cn("font-normal", styles[status])}>
+              <Badge variant="outline" className={cn("font-normal", styles[runStatus])}>
                 <AlertCircle size={12} className="mr-1" />
-                Error
+                {label}
               </Badge>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="text-xs max-w-xs">{errMsg}</p>
+              <p className="text-xs max-w-xs">{progressMsg}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       );
     }
 
-    if (status === 'indexing') {
+    if (runStatus === 'indexing') {
       return (
-        <Badge variant="outline" className={cn("font-normal", styles[status])}>
+        <Badge variant="outline" className={cn("font-normal", styles[runStatus])}>
           <Loader2 size={12} className="mr-1 animate-spin" />
-          索引中
+          {label}
         </Badge>
       )
     }
 
     return (
-      <Badge variant="outline" className={cn("font-normal", styles[status])}>
+      <Badge variant="outline" className={cn("font-normal", styles[runStatus])}>
         {label}
       </Badge>
     );
@@ -167,13 +248,25 @@ export default function DocumentList() {
           <h1 className="text-2xl font-semibold text-gray-900">文档列表</h1>
           <p className="text-sm text-gray-500 mt-1">管理和组织知识库文档。</p>
         </div>
-        <Button
-          className="bg-blue-600 hover:bg-blue-700"
-          onClick={() => navigate(`/knowledge/${id}/dataset/create`)}
-        >
-          <Plus size={16} className="mr-2" />
-          添加文件
-        </Button>
+        <div className="flex gap-2">
+          {selectedIds.size > 0 && (
+            <Button
+              variant="secondary"
+              onClick={handleBatchParse}
+              disabled={parsing}
+            >
+              {parsing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play size={16} className="mr-2" />}
+              批量解析 ({selectedIds.size})
+            </Button>
+          )}
+          <Button
+            className="bg-blue-600 hover:bg-blue-700"
+            onClick={() => navigate(`/knowledge/${id}/dataset/create`)}
+          >
+            <Plus size={16} className="mr-2" />
+            添加文件
+          </Button>
+        </div>
       </div>
 
       <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
@@ -227,7 +320,13 @@ export default function DocumentList() {
         <Table>
           <TableHeader className="bg-gray-50/50">
             <TableRow>
-              <TableHead className="w-[40%]">名称</TableHead>
+              <TableHead className="w-[40px]">
+                <Checkbox
+                  checked={list.length > 0 && selectedIds.size === list.length}
+                  onCheckedChange={toggleSelectAll}
+                />
+              </TableHead>
+              <TableHead className="w-[35%]">名称</TableHead>
               <TableHead>大小</TableHead>
               <TableHead>切片数</TableHead>
               <TableHead>上传时间</TableHead>
@@ -240,6 +339,7 @@ export default function DocumentList() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
+                  <TableCell><div className="h-4 w-4 bg-gray-100 rounded animate-pulse"></div></TableCell>
                   <TableCell><div className="h-4 bg-gray-100 rounded w-3/4 animate-pulse"></div></TableCell>
                   <TableCell><div className="h-4 bg-gray-100 rounded w-1/2 animate-pulse"></div></TableCell>
                   <TableCell><div className="h-4 bg-gray-100 rounded w-1/2 animate-pulse"></div></TableCell>
@@ -251,7 +351,7 @@ export default function DocumentList() {
               ))
             ) : list.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-gray-500">
+                <TableCell colSpan={8} className="h-32 text-center text-gray-500">
                   暂无文档
                 </TableCell>
               </TableRow>
@@ -261,16 +361,24 @@ export default function DocumentList() {
                   key={doc.id}
                   className={cn(
                     "hover:bg-gray-50/50 cursor-pointer",
-                    doc.status === 'disable' ? "hover:bg-blue-50/50" : "hover:bg-gray-100/50"
+                    doc.status === 0 ? "hover:bg-blue-50/50" : "hover:bg-gray-100/50",
+                    selectedIds.has(doc.id) && "bg-blue-50/30"
                   )}
                   onClick={() => {
-                    if (doc.status === 'disable') {
+                    // Default: View details. Need to be careful not to conflict with checkbox
+                    if (doc.status === 0) {
                       navigate(`/knowledge/${id}/document/${doc.id}/edit`);
                     } else {
                       navigate(`/knowledge/${id}/document/${doc.id}`);
                     }
                   }}
                 >
+                  <TableCell onClick={(e) => { e.stopPropagation(); }}>
+                    <Checkbox
+                      checked={selectedIds.has(doc.id)}
+                      onCheckedChange={() => toggleSelectOne(doc.id)}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-500 flex-shrink-0">
@@ -288,22 +396,44 @@ export default function DocumentList() {
                   </TableCell>
                   <TableCell className="text-gray-500">
                     <Badge variant="secondary" className="font-normal bg-gray-100 text-gray-600 hover:bg-gray-100">
-                      {doc.chunk_count} 个切片
+                      {doc.chunk_num} 个切片
                     </Badge>
                   </TableCell>
                   <TableCell className="text-gray-500 text-sm">
-                    {doc.created_at}
+                    {formatTime(doc.created_time)}
                   </TableCell>
                   <TableCell>
-                    {getStatusBadge(doc.status, doc.err_msg)}
+                    {getStatusBadge(doc.run_status, doc.progress_msg)}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Switch checked={doc.status === 1} />
                   </TableCell>
                   <TableCell>
-                    <Switch checked={doc.status === 'enable'} />
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-900">
-                      <MoreHorizontal size={16} />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {/* Parse Button */}
+                      {(doc.run_status !== 'indexing' && doc.run_status !== 'pending') && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:text-blue-600"
+                                onClick={(e) => handleParseOne(e, doc.id)}
+                              >
+                                <Play size={16} />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Run Parsing</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+
+                      {/* More Button */}
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-900">
+                        <MoreHorizontal size={16} />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

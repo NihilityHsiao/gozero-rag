@@ -1,0 +1,137 @@
+syntax = "v1"
+import "./common.api"
+
+type (
+    // 知识库基本信息
+    KnowledgeBaseInfo {
+        Id                     string `json:"id"`
+        Avatar                 string `json:"avatar,optional"`
+        TenantId               string `json:"tenant_id"`
+        Name                   string `json:"name"`
+        Language               string `json:"language"`
+        Description            string `json:"description,optional"`
+        EmbdId                 string `json:"embd_id"`
+        Permission             string `json:"permission"`
+        CreatedBy              string `json:"created_by"`
+        DocNum                 int64  `json:"doc_num"`
+        TokenNum               int64  `json:"token_num"`
+        ChunkNum               int64  `json:"chunk_num"`
+        SimilarityThreshold    float64 `json:"similarity_threshold"`
+        VectorSimilarityWeight float64 `json:"vector_similarity_weight"`
+        Status                 int64  `json:"status"`
+        ParserId               string `json:"parser_id"`      // 解析器ID
+        ParserConfig           string `json:"parser_config"`  // 解析配置 JSON
+        CreatedTime            int64  `json:"created_time"`
+        UpdatedTime            int64  `json:"updated_time"`
+    }
+
+    // 创建知识库请求
+    CreateKnowledgeBaseReq {
+        Name                   string  `json:"name"`
+        Avatar                 string  `json:"avatar,optional"`
+        Language               string  `json:"language,optional,default=Chinese"`
+        Description            string  `json:"description,optional"`
+        EmbdId                 string  `json:"embd_id"`
+        Permission             string  `json:"permission,optional,default=me"`
+        SimilarityThreshold    float64 `json:"similarity_threshold,optional,default=0.3"`
+        VectorSimilarityWeight float64 `json:"vector_similarity_weight,optional,default=0.3"`
+    }
+
+    // 创建知识库响应
+    CreateKnowledgeBaseResp {
+        KnowledgeBaseInfo
+    }
+
+    // 获取知识库列表请求
+    ListKnowledgeBaseReq {
+        Page     int64  `form:"page,optional,default=1"`
+        PageSize int64  `form:"page_size,optional,default=20"`
+        Keyword  string `form:"keyword,optional"`
+    }
+
+    // 获取知识库列表响应
+    ListKnowledgeBaseResp {
+        Total int64               `json:"total"`
+        List  []KnowledgeBaseInfo `json:"list"`
+    }
+
+    // 获取知识库详情请求
+    GetKnowledgeBaseReq {
+        Id string `path:"id"`
+    }
+
+    // 获取知识库详情响应
+    GetKnowledgeBaseResp {
+        KnowledgeBaseInfo
+    }
+
+    // 更新知识库请求
+    UpdateKnowledgeBaseReq {
+        Id                     string  `path:"id"`
+        Name                   string  `json:"name,optional"`
+        Avatar                 string  `json:"avatar,optional"`
+        Language               string  `json:"language,optional"`
+        Description            string  `json:"description,optional"`
+        Permission             string  `json:"permission,optional"`
+        SimilarityThreshold    float64 `json:"similarity_threshold,optional"`
+        VectorSimilarityWeight float64 `json:"vector_similarity_weight,optional"`
+        Status                 int64   `json:"status,optional"`
+        ParserId               string  `json:"parser_id,optional"`     // 解析器ID: general | resume
+        ParserConfig           string  `json:"parser_config,optional"` // 解析配置 JSON
+    }
+    
+    // 更新知识库响应
+    UpdateKnowledgeBaseResp {
+    }
+
+    // 删除知识库请求
+    DeleteKnowledgeBaseReq {
+        Id string `path:"id"`
+    }
+    
+    // 删除知识库响应
+    DeleteKnowledgeBaseResp {
+    }
+
+    // 更新知识库权限请求
+    UpdateKnowledgeBasePermissionReq {
+        Id         string `path:"id"`
+        Permission string `json:"permission"` // me | team
+    }
+
+    // 更新知识库权限响应
+    UpdateKnowledgeBasePermissionResp {
+    }
+)
+
+@server (
+    group  : knowledge_base
+    prefix : /v1/knowledge
+    jwt    : Auth
+    tags   : "知识库管理"
+)
+service rag {
+    @doc "创建知识库"
+    @handler CreateKnowledgeBase
+    post /create (CreateKnowledgeBaseReq) returns (CreateKnowledgeBaseResp)
+
+    @doc "获取知识库列表"
+    @handler ListKnowledgeBase
+    get /list (ListKnowledgeBaseReq) returns (ListKnowledgeBaseResp)
+
+    @doc "获取知识库详情"
+    @handler GetKnowledgeBase
+    get /:id (GetKnowledgeBaseReq) returns (GetKnowledgeBaseResp)
+
+    @doc "更新知识库"
+    @handler UpdateKnowledgeBase
+    put /:id (UpdateKnowledgeBaseReq) returns (UpdateKnowledgeBaseResp)
+
+    @doc "删除知识库"
+    @handler DeleteKnowledgeBase
+    delete /:id (DeleteKnowledgeBaseReq) returns (DeleteKnowledgeBaseResp)
+
+    @doc "更新知识库权限"
+    @handler UpdateKnowledgeBasePermission
+    patch /:id/permission (UpdateKnowledgeBasePermissionReq) returns (UpdateKnowledgeBasePermissionResp)
+}

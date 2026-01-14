@@ -26,7 +26,7 @@ type (
         Prompt string `json:"prompt"` // 系统提示词
         Temperature float64 `json:"temperature"` // 随机性
 
-        KnowledgeBaseIds []uint64 `json:"knowledge_base_ids"` // 上下文 知识库id列表
+        KnowledgeBaseIds []string `json:"knowledge_base_ids"` // 上下文 知识库id列表
 
         // 检索设置
         ChatRetrieveConfig ChatRetrieveConfig `json:"chat_retrieve_config"`

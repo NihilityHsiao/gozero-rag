@@ -45,7 +45,7 @@ func (l *DocumentIndexLogic) Consume(_ context.Context, key, val string) (err er
 		return nil                                         // 这里的 err 不需要抛给 kq，否则会一直重试。如果是格式错误，直接丢弃即可。
 	}
 
-	if msg.UserId == 0 || msg.KnowledgeBaseId == 0 || msg.DocumentId == "" {
+	if msg.UserId == "" || msg.KnowledgeBaseId == 0 || msg.DocumentId == "" {
 		logx.Errorf("非法参数:%s", val)
 		return nil
 	}
@@ -156,7 +156,7 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 	if err != nil {
 		return failTask(fmt.Sprintf("Embedding 模型 (id=%d) 未找到: %v", kb.EmbeddingModelId, err))
 	}
-	if embedApiRecord.UserId != int64(msg.UserId) {
+	if embedApiRecord.UserId != msg.UserId {
 		return failTask("Embedding 模型所有权不匹配")
 	}
 
@@ -208,23 +208,29 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 		return failTask(fmt.Sprintf("处理器执行失败: %v", err))
 	}
 
-	saveChunks := slicex.Into(chunks, func(chunk *schema.Document) *knowledge.KnowledgeDocumentChunk {
+	saveChunks, err := slicex.IntoWithError(chunks, func(chunk *schema.Document) (*knowledge.KnowledgeDocumentChunk, error) {
 		// 序列化 Metadata
 		metaBytes, _ := json.Marshal(chunk.MetaData)
 
-		// 生成 UUID v7（如不可用则用 v4，使用 uuid.NewString()）
-		chunkId := uuid.NewString()
+		// 生成 UUID v7
+		chunkUuid, err := uuid.NewV7()
+		if err != nil {
+			return nil, err
+		}
 
 		return &knowledge.KnowledgeDocumentChunk{
-			Id:                  chunkId,
+			Id:                  chunkUuid.String(),
 			KnowledgeBaseId:     msg.KnowledgeBaseId,
 			KnowledgeDocumentId: documentId,
 			ChunkText:           chunk.Content,
 			ChunkSize:           int64(len(chunk.Content)),
 			Metadata:            string(metaBytes),
 			Status:              "enable",
-		}
+		}, nil
 	})
+	if err != nil {
+		return failTask(fmt.Sprintf("UUID generation failed: %v", err))
+	}
 
 	// 6. 生成向量数据 (Embedding) & 准备 Milvus 数据
 	vectorItems, err := l.generateVectorItems(ctx, saveChunks, embedApiRecord)

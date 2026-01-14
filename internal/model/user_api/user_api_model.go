@@ -16,11 +16,11 @@ type (
 	UserApiModel interface {
 		userApiModel
 		// 自定义方法：根据用户ID查询模型列表（支持分页和筛选）
-		FindListByUserId(ctx context.Context, userId int64, modelType string, status int, page, pageSize int) ([]*UserApi, int64, error)
+		FindListByUserId(ctx context.Context, userId string, modelType string, status int, page, pageSize int) ([]*UserApi, int64, error)
 		// 自定义方法：根据用户ID和模型类型查询模型列表
-		FindByUserIdAndModelType(ctx context.Context, userId int64, modelType string) ([]*UserApi, error)
+		FindByUserIdAndModelType(ctx context.Context, userId string, modelType string) ([]*UserApi, error)
 		// 自定义方法：更新默认状态 (事务)
-		UpdateDefaultStatus(ctx context.Context, userId int64, modelType string, targetId int64) error
+		UpdateDefaultStatus(ctx context.Context, userId string, modelType string, targetId int64) error
 		FindByIds(ctx context.Context, ids []uint64) ([]*UserApi, error)
 	}
 
@@ -37,7 +37,7 @@ func NewUserApiModel(conn sqlx.SqlConn, c cache.CacheConf, opts ...cache.Option)
 }
 
 // FindListByUserId 根据用户ID查询模型列表（支持分页和筛选）
-func (m *customUserApiModel) FindListByUserId(ctx context.Context, userId int64, modelType string, status int, page, pageSize int) ([]*UserApi, int64, error) {
+func (m *customUserApiModel) FindListByUserId(ctx context.Context, userId string, modelType string, status int, page, pageSize int) ([]*UserApi, int64, error) {
 	// 构建查询条件
 	where := "`user_id` = ?"
 	args := []interface{}{userId}
@@ -74,7 +74,7 @@ func (m *customUserApiModel) FindListByUserId(ctx context.Context, userId int64,
 }
 
 // FindByUserIdAndModelType 根据用户ID和模型类型查询所有模型
-func (m *customUserApiModel) FindByUserIdAndModelType(ctx context.Context, userId int64, modelType string) ([]*UserApi, error) {
+func (m *customUserApiModel) FindByUserIdAndModelType(ctx context.Context, userId string, modelType string) ([]*UserApi, error) {
 	query := fmt.Sprintf("SELECT %s FROM %s WHERE `user_id` = ? AND `model_type` = ? AND `status` = 1 ORDER BY `is_default` DESC, `id` DESC", userApiRows, m.table)
 
 	var list []*UserApi
@@ -87,7 +87,7 @@ func (m *customUserApiModel) FindByUserIdAndModelType(ctx context.Context, userI
 }
 
 // UpdateDefaultStatus 更新默认状态 (事务)
-func (m *customUserApiModel) UpdateDefaultStatus(ctx context.Context, userId int64, modelType string, targetId int64) error {
+func (m *customUserApiModel) UpdateDefaultStatus(ctx context.Context, userId string, modelType string, targetId int64) error {
 	// 1. 获取目标模型信息 (用于校验和清除缓存)
 	target, err := m.FindOne(ctx, uint64(targetId))
 	if err != nil {

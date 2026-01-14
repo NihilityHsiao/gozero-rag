@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Settings, FileCog, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,44 +20,60 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-
-import { getKnowledgeDetail, updateKnowledgeBase } from '@/api/knowledge';
-import { getUserApiList } from '@/api/user_model';
-import { useKnowledgeStore } from '@/store/useKnowledgeStore';
-import { useAuthStore } from '@/store/useAuthStore';
-import type { KnowledgeBaseInfo, UserApiInfo } from '@/types';
+import { Slider } from '@/components/ui/slider';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 
+import { getKnowledgeDetail, updateKnowledgeBase } from '@/api/knowledge';
+import { getUserApiList } from '@/api/user_model';
+import { listLlmFactories } from '@/api/llm';
+import { useKnowledgeStore } from '@/store/useKnowledgeStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import type { KnowledgeBaseInfo, UserApiInfo, LlmFactoryInfo } from '@/types';
+
 // Schema Definition
 const settingsSchema = z.object({
+    // General
     name: z.string().min(1, '请输入名称').max(50, '名称过长'),
     description: z.string().max(500, '描述过长').optional(),
+    permission: z.enum(['me', 'team']),
     status: z.boolean(),
+
+    // Models
     qa_model_id: z.number().optional(),
     chat_model_id: z.number().optional(),
     rerank_model_id: z.number().optional(),
     rewrite_model_id: z.number().optional(),
+
+    // Parser Config
+    parser_id: z.enum(['general', 'resume']),
+
+    // Detailed Config Fields
+    chunk_token_num: z.number().min(128).max(2048),
+    chunk_overlap_token_num: z.number().min(0).max(200),
+    separator: z.array(z.string()), // Changed to array
+    layout_recognize: z.boolean(),
+    pdf_parser: z.enum(['pdfcpu', 'eino', 'deepdoc']),
 });
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;
 
 export default function KnowledgeSettings() {
     const { id } = useParams<{ id: string }>();
-    const knowledgeId = Number(id);
+    const knowledgeId = id!;
     const { fetchList } = useKnowledgeStore();
+    const [activeTab, setActiveTab] = useState<'general' | 'config'>('general');
 
-    // Additional state for read-only fields that are not in the form
-    // or just use form.watch() if we put them in form (but model shouldn't be edited)
-    // Better to store full info to display created_at etc.
-    // We can use a separate state or just rely on form for editable ones.
-    // Let's store full info in a state.
     const [info, setInfo] = useState<KnowledgeBaseInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [models, setModels] = useState<UserApiInfo[]>([]);
+    const [factories, setFactories] = useState<LlmFactoryInfo[]>([]);
     const user = useAuthStore(state => state.userInfo);
 
-    // 按类型分组模型
+    // Tag Input State
+    const [tagInput, setTagInput] = useState('');
+
     const modelGroups = useMemo(() => {
         const groups: Record<string, UserApiInfo[]> = {
             qa: [],
@@ -79,11 +95,19 @@ export default function KnowledgeSettings() {
         defaultValues: {
             name: '',
             description: '',
+            permission: 'me',
             status: true,
             qa_model_id: undefined,
             chat_model_id: undefined,
             rerank_model_id: undefined,
             rewrite_model_id: undefined,
+
+            parser_id: 'general',
+            chunk_token_num: 512,
+            chunk_overlap_token_num: 64,
+            separator: ['\\n\\n', '\\n', ' ', ''], // Default separators as array
+            layout_recognize: true,
+            pdf_parser: 'eino',
         },
     });
 
@@ -95,7 +119,7 @@ export default function KnowledgeSettings() {
                 const res = await getKnowledgeDetail(knowledgeId);
                 setInfo(res);
 
-                // Parse model_ids to find specific model type IDs
+                // Parse model_ids
                 const modelMap = new Map<string, number>();
                 if (res.model_ids) {
                     res.model_ids.forEach((m: any) => {
@@ -103,14 +127,40 @@ export default function KnowledgeSettings() {
                     });
                 }
 
+                // Parse parser_config
+                let parserConfig: any = {};
+                try {
+                    if (res.parser_config) {
+                        parserConfig = JSON.parse(res.parser_config);
+                    }
+                } catch (e) {
+                    console.error("Failed to parse parser_config", e);
+                }
+
+                // Handle separator (string[] or string or undefined)
+                let separatorList = ['\\n\\n', '\\n', ' ', ''];
+                if (parserConfig.separator) {
+                    if (Array.isArray(parserConfig.separator)) {
+                        separatorList = parserConfig.separator;
+                    }
+                }
+
                 form.reset({
                     name: res.name,
                     description: res.description,
+                    permission: (res.permission as 'me' | 'team') || 'me',
                     status: res.status === 1,
                     qa_model_id: modelMap.get('qa'),
                     chat_model_id: modelMap.get('chat'),
                     rerank_model_id: modelMap.get('rerank'),
                     rewrite_model_id: modelMap.get('rewrite'),
+
+                    parser_id: (res.parser_id as 'general' | 'resume') || 'general',
+                    chunk_token_num: parserConfig.chunk_token_num ?? 512,
+                    chunk_overlap_token_num: parserConfig.chunk_overlap_token_num ?? 64,
+                    separator: separatorList,
+                    layout_recognize: parserConfig.layout_recognize ?? true,
+                    pdf_parser: parserConfig.pdf_parser || 'eino',
                 });
             } catch (error) {
                 console.error(error);
@@ -122,37 +172,84 @@ export default function KnowledgeSettings() {
         load();
     }, [knowledgeId, form]);
 
-    // 加载用户可用模型列表
     useEffect(() => {
         if (!user?.user_id) return;
         getUserApiList(user.user_id, { status: 1 })
             .then(res => setModels(res.list || []))
             .catch(err => console.error('Failed to load models:', err));
+
+        listLlmFactories()
+            .then(res => setFactories(res.list || []))
+            .catch(err => console.error('Failed to load factories:', err));
     }, [user?.user_id]);
 
     const onSubmit = async (data: SettingsFormValues) => {
         if (!knowledgeId) return;
         try {
+            const parserConfig: any = {};
+            if (data.parser_id === 'general') {
+                parserConfig.chunk_token_num = data.chunk_token_num;
+                parserConfig.chunk_overlap_token_num = data.chunk_overlap_token_num;
+                parserConfig.separator = data.separator; // Save as array
+                parserConfig.layout_recognize = data.layout_recognize;
+                parserConfig.pdf_parser = data.pdf_parser;
+            } else {
+                parserConfig.pdf_parser = data.pdf_parser;
+            }
+
             await updateKnowledgeBase(knowledgeId, {
                 name: data.name,
                 description: data.description,
+                permission: data.permission,
                 status: data.status ? 1 : 0,
                 qa_model_id: data.qa_model_id,
                 chat_model_id: data.chat_model_id,
                 rerank_model_id: data.rerank_model_id,
                 rewrite_model_id: data.rewrite_model_id,
+                parser_id: data.parser_id,
+                parser_config: JSON.stringify(parserConfig),
             });
             toast.success('设置更新成功');
-            // Refresh detail
             const res = await getKnowledgeDetail(knowledgeId);
             setInfo(res);
-            // Refresh global list to update sidebar name
             fetchList();
         } catch (error) {
             console.error(error);
             toast.error('更新设置失败');
         }
     };
+
+    // Parse embedding model info
+    let displayModelName = '';
+    let displayProvider = '';
+    let displayIcon = '';
+    let displayType = 'Embedding';
+
+    if (info?.embd_id) {
+        const parts = info.embd_id.split('@');
+        displayModelName = parts[0];
+        displayProvider = parts[1] || '';
+
+        // Try to match with existing models to get Icon
+        const matched = models.find(m => m.model_name === displayModelName);
+        if (matched) {
+            displayIcon = matched.icon;
+            displayType = matched.model_type;
+        } else if (displayProvider) {
+            const factory = factories.find(f => f.name === displayProvider);
+            if (factory) {
+                displayIcon = factory.logo;
+            }
+        }
+    } else if (info?.embedding_model_id) {
+        const matched = models.find(m => m.id === info.embedding_model_id);
+        if (matched) {
+            displayModelName = matched.model_name;
+            displayProvider = matched.provider;
+            displayIcon = matched.icon;
+            displayType = matched.model_type;
+        }
+    }
 
     if (loading) {
         return (
@@ -163,239 +260,251 @@ export default function KnowledgeSettings() {
     }
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h3 className="text-lg font-medium">设置</h3>
-                <p className="text-sm text-gray-500">
-                    配置知识库设置。
-                </p>
-            </div>
+        <div className="flex flex-col md:flex-row gap-8">
+            <aside className="w-full md:w-64 space-y-1">
+                <Button variant={activeTab === 'general' ? 'secondary' : 'ghost'} className="w-full justify-start font-normal" onClick={() => setActiveTab('general')}>
+                    <Settings className="mr-2 h-4 w-4" /> 通用设置
+                </Button>
+                <Button variant={activeTab === 'config' ? 'secondary' : 'ghost'} className="w-full justify-start font-normal" onClick={() => setActiveTab('config')}>
+                    <FileCog className="mr-2 h-4 w-4" /> 配置
+                </Button>
+            </aside>
 
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>基本信息</CardTitle>
-                            <CardDescription>
-                                知识库的基本信息。
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6 max-w-2xl">
-                            <FormField
-                                control={form.control}
-                                name="name"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>知识库名称</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="例如：产品文档" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
+            <div className="flex-1 max-w-3xl">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                        {activeTab === 'general' && (
+                            <>
+                                <section className="space-y-4">
+                                    <div className="space-y-1">
+                                        <h3 className="text-lg font-semibold">基本信息</h3>
+                                        <p className="text-sm text-muted-foreground">管理知识库的基本属性</p>
+                                    </div>
+                                    <div className="space-y-4 p-1">
+                                        <FormField control={form.control} name="name" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>名称</FormLabel>
+                                                <FormControl><Input {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="description" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>描述</FormLabel>
+                                                <FormControl><Textarea {...field} className="min-h-[100px] resize-none" /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="status" render={({ field }) => (
+                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-card">
+                                                <div className="space-y-0.5">
+                                                    <FormLabel>启用状态</FormLabel>
+                                                    <FormDescription>禁用后无法检索</FormDescription>
+                                                </div>
+                                                <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                            </FormItem>
+                                        )} />
+                                        {info && (
+                                            <div className="text-xs text-muted-foreground">
+                                                创建: {info.created_at}
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+
+                                {info && info.created_by === user?.user_id && (
+                                    <section className="space-y-4 pt-6 border-t">
+                                        <h3 className="text-lg font-semibold">权限管理</h3>
+                                        <Card className="border-none shadow-none bg-transparent p-0">
+                                            <CardContent className="p-0">
+                                                <FormField control={form.control} name="permission" render={({ field }) => (
+                                                    <FormItem className="space-y-3">
+                                                        <FormLabel>可见范围</FormLabel>
+                                                        <FormControl>
+                                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
+                                                                <FormItem className="flex items-center space-x-3 space-y-0">
+                                                                    <FormControl><RadioGroupItem value="me" /></FormControl>
+                                                                    <FormLabel className="font-normal">仅自己</FormLabel>
+                                                                </FormItem>
+                                                                {/* Example of Team logic if needed */}
+                                                                <FormItem className="flex items-center space-x-3 space-y-0">
+                                                                    <FormControl><RadioGroupItem value="team" /></FormControl>
+                                                                    <FormLabel className="font-normal">团队可见</FormLabel>
+                                                                </FormItem>
+                                                            </RadioGroup>
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )} />
+                                            </CardContent>
+                                        </Card>
+                                    </section>
                                 )}
-                            />
+                            </>
+                        )}
 
-                            <FormField
-                                control={form.control}
-                                name="description"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>描述</FormLabel>
-                                        <FormControl>
-                                            <Textarea
-                                                placeholder="描述该知识库包含的内容..."
-                                                className="min-h-[100px]"
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                        {activeTab === 'config' && (
+                            <div className="space-y-8">
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>索引模型</CardTitle>
+                                        <CardDescription>创建后不可更改</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {displayModelName ? (
+                                            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border">
+                                                {displayIcon ? (
+                                                    <img src={displayIcon} alt="provider" className="w-8 h-8 rounded-sm bg-white p-1" />
+                                                ) : (
+                                                    <div className="w-8 h-8 bg-gray-200 rounded-sm" />
+                                                )}
+                                                <div>
+                                                    <div className="font-medium">{displayModelName}</div>
+                                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                                        {displayProvider && <span>{displayProvider}</span>}
+                                                        <Badge variant="outline" className="text-[10px] h-4 px-1">{displayType}</Badge>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-sm text-yellow-600">模型信息加载中或数据异常</div>
+                                        )}
+                                    </CardContent>
+                                </Card>
 
-                            {info && (
-                                <div className="space-y-2">
-                                    <FormLabel>Embedding 模型</FormLabel>
-                                    <Input value={"类型: " + (models.find(m => m.id === info.embedding_model_id)?.config_name || '加载中...')} disabled className="bg-gray-50 text-gray-500" />
-                                    <p className="text-[0.8rem] text-gray-500">
-                                        Embedding 模型创建后无法更改。
-                                    </p>
-                                </div>
-                            )}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>解析规则</CardTitle>
+                                        <CardDescription>配置文档的解析与切片策略</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-6">
+                                        <FormField control={form.control} name="parser_id" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>解析模式</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="general">General (通用)</SelectItem>
+                                                        <SelectItem value="resume">Resume (简历)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )} />
 
-                            <FormField
-                                control={form.control}
-                                name="status"
-                                render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                                        <div className="space-y-0.5">
-                                            <FormLabel className="text-base">
-                                                启用状态
-                                            </FormLabel>
-                                            <FormDescription>
-                                                禁用后该知识库将不会被检索。
-                                            </FormDescription>
-                                        </div>
-                                        <FormControl>
-                                            <Switch
-                                                checked={field.value}
-                                                onCheckedChange={field.onChange}
-                                            />
-                                        </FormControl>
-                                    </FormItem>
-                                )}
-                            />
+                                        {form.watch('parser_id') === 'general' && (
+                                            <div className="space-y-4 pl-1">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <FormField control={form.control} name="chunk_token_num" render={({ field }) => (
+                                                        <FormItem>
+                                                            <div className="flex justify-between">
+                                                                <FormLabel>块大小</FormLabel>
+                                                                <span className="text-xs font-mono text-muted-foreground">{field.value} tokens</span>
+                                                            </div>
+                                                            <FormControl>
+                                                                <Slider min={128} max={2048} step={1} value={[field.value]} onValueChange={(vals) => field.onChange(vals[0])} />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )} />
+                                                    <FormField control={form.control} name="chunk_overlap_token_num" render={({ field }) => (
+                                                        <FormItem>
+                                                            <div className="flex justify-between">
+                                                                <FormLabel>重叠大小</FormLabel>
+                                                                <span className="text-xs font-mono text-muted-foreground">{field.value} tokens</span>
+                                                            </div>
+                                                            <FormControl>
+                                                                <Slider min={0} max={200} step={1} value={[field.value]} onValueChange={(vals) => field.onChange(vals[0])} />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )} />
+                                                </div>
 
-                            {info && (
-                                <div className="pt-4 flex items-center gap-6 text-xs text-gray-400">
-                                    <span>创建时间: {new Date(info.created_at).toLocaleString()}</span>
-                                    <span>更新时间: {new Date(info.updated_at).toLocaleString()}</span>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                                <FormField control={form.control} name="separator" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>分隔符</FormLabel>
+                                                        <FormControl>
+                                                            <div className="flex flex-wrap gap-2 p-2 border rounded-md bg-white min-h-[42px]">
+                                                                {field.value.map((sep, idx) => (
+                                                                    <Badge key={idx} variant="secondary" className="px-2 py-1 flex items-center gap-1 font-mono text-xs">
+                                                                        {sep.replace(/\n/g, '\\n')}
+                                                                        <X className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => {
+                                                                            const newVal = [...field.value];
+                                                                            newVal.splice(idx, 1);
+                                                                            field.onChange(newVal);
+                                                                        }} />
+                                                                    </Badge>
+                                                                ))}
+                                                                <input
+                                                                    className="flex-1 outline-none bg-transparent text-sm min-w-[60px]"
+                                                                    placeholder={field.value.length === 0 ? "输入字符并回车..." : ""}
+                                                                    value={tagInput}
+                                                                    onChange={(e) => setTagInput(e.target.value)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') {
+                                                                            e.preventDefault();
+                                                                            if (tagInput) {
+                                                                                // Handle escaped characters if user types \n
+                                                                                let val = tagInput;
+                                                                                if (val === '\\n') val = '\n';
+                                                                                if (val === '\\n\\n') val = '\n\n';
 
-                    {/* Model Configuration Card */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>模型配置</CardTitle>
-                            <CardDescription>
-                                配置知识库在 RAG 流程中使用的各类模型
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6 max-w-2xl">
-                            {/* Embedding Model - Read Only */}
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <FormLabel>Embedding 模型</FormLabel>
-                                    <Badge variant="secondary" className="text-xs">不可变</Badge>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-md border text-sm text-gray-600">
-                                    {models.find(m => m.id === info?.embedding_model_id)?.config_name || '加载中...'}
-                                </div>
-                                <p className="text-xs text-gray-500">
-                                    Embedding 模型在创建时确定，变更会导致索引失效。
-                                </p>
+                                                                                if (!field.value.includes(val)) {
+                                                                                    field.onChange([...field.value, val]);
+                                                                                }
+                                                                                setTagInput('');
+                                                                            }
+                                                                        }
+                                                                        if (e.key === 'Backspace' && !tagInput && field.value.length > 0) {
+                                                                            // remove last
+                                                                            const newVal = [...field.value];
+                                                                            newVal.pop();
+                                                                            field.onChange(newVal);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </FormControl>
+                                                        <FormDescription>用于分块的字符序列，优先级从左到右 (支持 \n 转义)</FormDescription>
+                                                    </FormItem>
+                                                )} />
+
+                                                <FormField control={form.control} name="layout_recognize" render={({ field }) => (
+                                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                                                        <div className="space-y-0.5">
+                                                            <FormLabel>版面识别</FormLabel>
+                                                            <FormDescription>增强表格与标题的识别效果</FormDescription>
+                                                        </div>
+                                                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                            </div>
+                                        )}
+
+                                        <FormField control={form.control} name="pdf_parser" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>PDF 解析器</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="eino">Eino (通用/稳定)</SelectItem>
+                                                        <SelectItem value="pdfcpu">pdfcpu (快速)</SelectItem>
+                                                        <SelectItem value="deepdoc">DeepDoc (深度OCR)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )} />
+                                    </CardContent>
+                                </Card>
                             </div>
+                        )}
 
-                            {/* QA Model */}
-                            <FormField
-                                control={form.control}
-                                name="qa_model_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>QA 生成模型</FormLabel>
-                                        <Select
-                                            onValueChange={(val) => field.onChange(val ? Number(val) : undefined)}
-                                            value={field.value?.toString() ?? ''}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="选择 QA 模型（可选）" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {modelGroups.qa.map(m => (
-                                                    <SelectItem key={m.id} value={m.id.toString()}>
-                                                        {m.config_name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            {/* Chat Model */}
-                            <FormField
-                                control={form.control}
-                                name="chat_model_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Chat 模型</FormLabel>
-                                        <Select
-                                            onValueChange={(val) => field.onChange(val ? Number(val) : undefined)}
-                                            value={field.value?.toString() ?? ''}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="选择 Chat 模型（可选）" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {modelGroups.chat.map(m => (
-                                                    <SelectItem key={m.id} value={m.id.toString()}>
-                                                        {m.config_name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            {/* Rerank Model */}
-                            <FormField
-                                control={form.control}
-                                name="rerank_model_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Rerank 模型</FormLabel>
-                                        <Select
-                                            onValueChange={(val) => field.onChange(val ? Number(val) : undefined)}
-                                            value={field.value?.toString() ?? ''}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="选择 Rerank 模型（可选）" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {modelGroups.rerank.map(m => (
-                                                    <SelectItem key={m.id} value={m.id.toString()}>
-                                                        {m.config_name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            {/* Rewrite Model */}
-                            <FormField
-                                control={form.control}
-                                name="rewrite_model_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Rewrite 模型</FormLabel>
-                                        <Select
-                                            onValueChange={(val) => field.onChange(val ? Number(val) : undefined)}
-                                            value={field.value?.toString() ?? ''}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="选择 Rewrite 模型（可选）" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {modelGroups.rewrite.map(m => (
-                                                    <SelectItem key={m.id} value={m.id.toString()}>
-                                                        {m.config_name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </CardContent>
-                    </Card>
-
-                    <div className="flex justify-end">
-                        <Button type="submit" disabled={form.formState.isSubmitting}>
-                            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            保存设置
-                        </Button>
-                    </div>
-                </form>
-            </Form>
+                        <div className="flex justify-end pt-4">
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                保存设置
+                            </Button>
+                        </div>
+                    </form>
+                </Form>
+            </div>
         </div>
     );
 }

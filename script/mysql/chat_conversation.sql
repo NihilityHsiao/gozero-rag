@@ -6,7 +6,7 @@ use gozero_rag;
 DROP TABLE IF EXISTS `chat_conversation`;
 CREATE TABLE `chat_conversation` (
   `id` char(36) NOT NULL COMMENT '会话ID (UUID)',
-  `user_id` int(11) NOT NULL COMMENT '用户ID',
+  `user_id` varchar(36) NOT NULL COMMENT '用户ID (UUID)',
   `title` varchar(255) NOT NULL DEFAULT 'New Conversation' COMMENT '会话标题',
   `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '状态: 1-正常, 2-归档, 3-删除',
   `message_count` int(11) NOT NULL DEFAULT '0' COMMENT '消息数量',

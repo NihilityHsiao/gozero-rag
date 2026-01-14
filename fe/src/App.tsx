@@ -3,6 +3,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import KnowledgeList from '@/pages/knowledge/KnowledgeList';
 import CreateKnowledge from '@/pages/knowledge/CreateKnowledge';
 import Login from '@/pages/auth/Login';
+import Register from '@/pages/auth/Register';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import { Toaster } from 'sonner';
 
@@ -11,7 +12,7 @@ import DocumentList from '@/pages/knowledge/DocumentList';
 import DatasetCreatePage from '@/pages/dataset/DatasetCreatePage';
 import DocumentEditPage from '@/pages/dataset/DocumentEditPage';
 import KnowledgeSettings from '@/pages/knowledge/KnowledgeSettings';
-import { SettingsLayout, ModelList, UserInfo } from '@/pages/settings';
+import { SettingsLayout, ModelList, UserInfo, TeamManagement } from '@/pages/settings';
 
 import DocumentDetailPage from '@/pages/knowledge/document/DocumentDetailPage';
 import RetrievalTestPage from '@/pages/knowledge/RetrievalTestPage';
@@ -22,7 +23,10 @@ function App() {
     <BrowserRouter>
       <Toaster richColors position="top-center" />
       <Routes>
+        {/* 认证路由 */}
         <Route path="/login" element={<Login />} />
+        <Route path="/auth/login" element={<Login />} />
+        <Route path="/auth/register" element={<Register />} />
 
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>
@@ -54,6 +58,7 @@ function App() {
             <Route index element={<Navigate to="provider" replace />} />
             <Route path="provider" element={<ModelList />} />
             <Route path="profile" element={<UserInfo />} />
+            <Route path="team" element={<TeamManagement />} />
           </Route>
         </Route>
       </Routes>

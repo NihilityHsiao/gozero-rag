@@ -4,10 +4,11 @@ package xerr
 var message map[uint32]string
 
 const (
-	OK            uint32 = 200
-	Unauthorized  uint32 = 401
-	BadRequest    uint32 = 400
-	InternalError uint32 = 500
+	OK             uint32 = 200
+	BadRequest     uint32 = 400
+	Unauthorized   uint32 = 401
+	ForbiddenError uint32 = 403
+	InternalError  uint32 = 500
 
 	// ServerCommonError 全局错误码
 	ServerCommonError uint32 = 100001

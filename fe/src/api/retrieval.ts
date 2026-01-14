@@ -10,7 +10,7 @@ export const retrievalApi = {
     },
 
     // 获取知识库召回记录
-    getRetrievalLog: async (knowledgeBaseId: number, params: { page: number; page_size: number }): Promise<GetRetrieveLogResp> => {
+    getRetrievalLog: async (knowledgeBaseId: string, params: { page: number; page_size: number }): Promise<GetRetrieveLogResp> => {
         // URL without /v1 prefix as configured in vite proxy
         return request.get<any, GetRetrieveLogResp>(`/retrieval/log/${knowledgeBaseId}`, { params });
     },

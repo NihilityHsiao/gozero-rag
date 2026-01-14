@@ -26,5 +26,6 @@ type Config struct {
 		Brokers []string
 		Topic   string
 	}
-	VectorStore commonconf.VectorStoreConf
+	VectorStore   commonconf.VectorStoreConf
+	ElasticSearch commonconf.ElasticSearchConf
 }

@@ -76,7 +76,7 @@ export default function ConfigPanel() {
         setConfig({ knowledge_base_ids: kbs.map(k => k.id) });
     };
 
-    const handleRemoveKnowledge = (id: number) => {
+    const handleRemoveKnowledge = (id: string) => {
         const newList = selectedKnowledgeList.filter(k => k.id !== id);
         setSelectedKnowledgeList(newList);
         setConfig({ knowledge_base_ids: newList.map(k => k.id) });

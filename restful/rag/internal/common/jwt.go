@@ -2,28 +2,32 @@ package common
 
 import (
 	"context"
-	"encoding/json"
 	"gozero-rag/internal/xerr"
 )
 
-// GetUidFromCtx  从 context 中获取用户ID
-func GetUidFromCtx(ctx context.Context) (int64, error) {
-	uid, ok := ctx.Value("uid").(json.Number)
+// GetUidFromCtx 从 context 中获取用户ID (UUID字符串)
+func GetUidFromCtx(ctx context.Context) (string, error) {
+	uid, ok := ctx.Value("uid").(string)
 	if !ok {
-		return 0, xerr.NewErrCodeMsg(xerr.InternalError, "获取用户信息失败")
+		return "", xerr.NewErrCodeMsg(xerr.InternalError, "获取用户信息失败")
 	}
-	uidInt, err := uid.Int64()
-	if err != nil {
-		return 0, xerr.NewErrCodeMsg(xerr.InternalError, "用户ID格式错误")
-	}
-	return uidInt, nil
+	return uid, nil
 }
 
-// GetUsernameFromCtx  从 context 中获取用户名
-func GetUsernameFromCtx(ctx context.Context) (string, error) {
-	username, ok := ctx.Value("username").(string)
+// GetTenantIdFromCtx 从 context 中获取当前租户ID
+func GetTenantIdFromCtx(ctx context.Context) (string, error) {
+	tenantId, ok := ctx.Value("tenant_id").(string)
 	if !ok {
-		return "", xerr.NewErrCodeMsg(xerr.InternalError, "获取用户名失败")
+		return "", xerr.NewErrCodeMsg(xerr.InternalError, "获取租户信息失败")
 	}
-	return username, nil
+	return tenantId, nil
+}
+
+// GetNicknameFromCtx 从 context 中获取用户昵称
+func GetNicknameFromCtx(ctx context.Context) (string, error) {
+	nickname, ok := ctx.Value("nickname").(string)
+	if !ok {
+		return "", xerr.NewErrCodeMsg(xerr.InternalError, "获取用户昵称失败")
+	}
+	return nickname, nil
 }
