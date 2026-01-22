@@ -16,5 +16,7 @@ type Config struct {
 	}
 	Oss commonconf.OssConf
 
+	ElasticSearch commonconf.ElasticSearchConf
+
 	VectorStore commonconf.VectorStoreConf
 }

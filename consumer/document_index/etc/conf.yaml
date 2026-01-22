@@ -17,12 +17,18 @@ Oss:
   BucketName: "rag-storage"
 
 # milvus, qdrant, es
-VectorStore:
-  Type: "milvus" 
-  Endpoint: "localhost:19530"
+# VectorStore:
+#   Type: "milvus" 
+#   Endpoint: "localhost:19530"
+#   Username: ""
+#   Password: ""
+#   Database: ""
+
+ElasticSearch:
+  Addresses:
+    - "http://localhost:9200"
   Username: ""
   Password: ""
-  Database: ""
 # 相关文档: https://go-zero.dev/docs/tutorials/message-queue/kafka
 KqConsumerConf:
   Name: KnowledgeDocumentIndexConsumer
