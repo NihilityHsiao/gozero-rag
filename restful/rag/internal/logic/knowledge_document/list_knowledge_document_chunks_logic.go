@@ -51,6 +51,7 @@ func (l *ListKnowledgeDocumentChunksLogic) ListKnowledgeDocumentChunks(req *type
 			DocName:     chunk.DocName,
 			ImportantKw: chunk.ImportantKw,
 			CreatedAt:   chunk.CreateTime,
+			Status:      chunk.Available,
 		})
 	}
 

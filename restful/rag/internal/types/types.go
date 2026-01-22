@@ -89,6 +89,7 @@ type ChunkInfo struct {
 	DocName     string   `json:"doc_name"`
 	ImportantKw []string `json:"important_keywords"` // 重要关键词
 	CreatedAt   float64  `json:"created_at"`         // 创建时间戳
+	Status      int      `json:"status"`             // 状态 1-启用 0-禁用
 }
 
 type Conversation struct {
