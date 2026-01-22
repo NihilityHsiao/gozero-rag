@@ -1,10 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import type { KnowledgeDocumentChunkInfo } from '@/types';
 import { Button } from '@/components/ui/button';
-import { X, Copy } from 'lucide-react';
+import { X, Copy, Eye, FileText } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+class MarkdownErrorBoundary extends React.Component<
+    { children: React.ReactNode; fallback: React.ReactNode },
+    { hasError: boolean }
+> {
+    constructor(props: any) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    componentDidCatch(error: any) {
+        console.error('Markdown render error:', error);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return this.props.fallback;
+        }
+        return this.props.children;
+    }
+}
 
 interface EditChunkDrawerProps {
     chunk: KnowledgeDocumentChunkInfo | null;
@@ -17,11 +44,17 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
     const [text, setText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [activeTab, setActiveTab] = useState<'content' | 'metadata'>('content');
+    const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview');
 
     useEffect(() => {
         if (chunk) {
             // 使用 content 字段，兼容旧的 chunk_text
-            setText(chunk.content || chunk.chunk_text || '');
+            const fullText = chunk.content || chunk.chunk_text || '';
+            setText(fullText);
+
+            // 初始化视图模式：QA切片默认源码，文档切片默认预览
+            const isQA = chunk.id.startsWith('qa-');
+            setViewMode(isQA ? 'source' : 'preview');
         }
     }, [chunk]);
 
@@ -29,6 +62,8 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
 
     // 计算字符数
     const charCount = text.length;
+    const isQA = chunk.id.startsWith('qa-');
+    const canPreview = !isQA && chunk.id.startsWith('chunk-');
 
     const handleSave = async () => {
         if (!onSave) {
@@ -73,7 +108,7 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
                             状态: <span className={chunk.status === 1 ? "text-green-600 font-medium" : "text-gray-500"}>
-                                {chunk.status === 1 ? '启用' : '启用'}
+                                {chunk.status === 1 ? '启用' : '禁用'}
                             </span>
                             {' · '}
                             {charCount} 字符
@@ -113,16 +148,58 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
                         {activeTab === 'content' && (
                             <div className="relative space-y-4 animate-in fade-in slide-in-from-left-2 duration-300">
                                 <div className="flex items-center justify-between mb-2">
-                                    <label className="text-sm font-medium text-gray-700">切片文本</label>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-sm font-medium text-gray-700">切片文本</label>
+                                        {/* View Mode Toggle */}
+                                        {canPreview && (
+                                            <div className="flex items-center bg-gray-100 rounded-md p-0.5 ml-2">
+                                                <button
+                                                    onClick={() => setViewMode('preview')}
+                                                    className={`p-1 rounded-sm transition-all ${viewMode === 'preview' ? 'bg-white shadow-sm text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    title="预览"
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setViewMode('source')}
+                                                    className={`p-1 rounded-sm transition-all ${viewMode === 'source' ? 'bg-white shadow-sm text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    title="源码"
+                                                >
+                                                    <FileText className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                     <Button variant="ghost" size="sm" className="h-6" onClick={copyToClipboard}>
                                         <Copy className="h-3 w-3 mr-1" /> 复制
                                     </Button>
                                 </div>
-                                <Textarea
-                                    className="min-h-[400px] font-mono text-sm leading-relaxed resize-none bg-white p-4"
-                                    value={text}
-                                    onChange={(e) => setText(e.target.value)}
-                                />
+
+                                {viewMode === 'preview' && canPreview ? (
+                                    <div className="min-h-[400px] bg-white p-6 border rounded-md shadow-sm">
+                                        <div className="prose prose-sm max-w-none text-gray-700">
+                                            <MarkdownErrorBoundary
+                                                fallback={<div className="whitespace-pre-wrap font-mono text-sm">{text}</div>}
+                                            >
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        img: ({ node, ...props }) => <span className="text-xs text-gray-400 block p-2 border border-dashed rounded bg-gray-50">[Image: {props.alt}]</span>,
+                                                    }}
+                                                >
+                                                    {text}
+                                                </ReactMarkdown>
+                                            </MarkdownErrorBoundary>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Textarea
+                                        className="min-h-[400px] font-mono text-sm leading-relaxed resize-none bg-white p-4"
+                                        value={text}
+                                        onChange={(e) => setText(e.target.value)}
+                                        placeholder="输入文本..."
+                                    />
+                                )}
                             </div>
                         )}
 
@@ -158,6 +235,10 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
                 {/* Footer */}
                 <div className="p-4 border-t bg-white flex justify-end gap-3">
                     <Button variant="outline" onClick={onClose}>取消</Button>
+                    {/* 只有在源码模式下，或者处于预览模式但文本未变更（预览即最新）时才显示保存，
+                        但因为 React state text 始终是最新的，所以保存始终保存 text。
+                        如果用户在预览模式想保存，也是可以的。
+                    */}
                     <Button onClick={handleSave} disabled={isSaving}>
                         {isSaving ? '保存中...' : '保存更改'}
                     </Button>
