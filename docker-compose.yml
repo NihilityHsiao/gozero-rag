@@ -311,6 +311,23 @@ services:
       "
     # 执行完命令后容器自动退出（无需长期运行）
     restart: "no"
+
+  # 9. Kafka UI - Kafka 管理界面
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - DYNAMIC_CONFIG_ENABLED=true
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: always
 #  demo-consumer:
 #    build:
 #      context: .
