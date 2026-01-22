@@ -18,10 +18,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/cloudwego/eino-ext/components/embedding/openai"
+	"github.com/gofrs/uuid/v5"
+
 	"github.com/cloudwego/eino/schema"
-	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 type DocumentIndexLogic struct {
@@ -209,56 +210,140 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 		return failTask(fmt.Sprintf("处理器执行失败: %v", err))
 	}
 
-	saveChunks, err := slicex.IntoWithError(chunks, func(c *schema.Document) (*chunk.Chunk, error) {
-		chunkUuid, uErr := uuid.NewV7()
-		if uErr != nil {
-			return nil, uErr
-		}
-
-		// todo: 完善
-		return &chunk.Chunk{
-			Id:            chunkUuid.String(),
-			DocId:         "",
-			KbIds:         nil,
-			Content:       "",
-			ContentVector: nil,
-			DocName:       "",
-			ImportantKw:   nil,
-			QuestionKw:    nil,
-			ImgId:         "",
-			PageNum:       nil,
-			CreateTime:    0,
-			Available:     0,
-			Score:         0,
-		}, nil
-
+	// 6. 生成向量 (Embedding)
+	embDim := 1024 // 默认向量维度
+	embedder, err := openai.NewEmbedder(ctx, &openai.EmbeddingConfig{
+		APIKey:     llmModel.ApiKey.String,
+		BaseURL:    llmModel.ApiBase.String,
+		Model:      llmModel.LlmName,
+		Dimensions: &embDim,
 	})
-
 	if err != nil {
-		return failTask(fmt.Sprintf("UUID generation failed: %v", err))
+		return failTask(fmt.Sprintf("创建embedder失败: %v", err))
 	}
 
-	// todo: 写入es
-
-	// 8. 更新 MySQL (Transaction)
-	err = l.svcCtx.SqlConn.TransactCtx(ctx, func(ctx context.Context, session sqlx.Session) error {
-		// todo:
-		return nil
+	// 提取所有 Chunk 的文本内容
+	contents := slicex.Into(chunks, func(c *schema.Document) string {
+		return c.Content
 	})
-
+	contentVectors, err := embedder.EmbedStrings(ctx, contents)
 	if err != nil {
-		// 补偿机制: MySQL 失败，回滚 Milvus 数据
-		logx.Errorf("[DocIndex] MySQL 事务失败，回滚 es 数据: %v", err)
-		//todo: 回滚 es 数据,
-		//	会滚失败: logx.Errorf("[DocIndex] 回滚 es 失败 (需人工介入): %v", delErr)
-		return failTask(err.Error())
+		return failTask(fmt.Sprintf("生成embedding失败: %v", err))
+	}
+
+	if len(contentVectors) != len(chunks) {
+		return failTask("embedding数量与chunk数量不一致")
+	}
+
+	// 7. 构建 ES Chunks (包含 QA 向量化)
+	saveChunks := make([]*chunk.Chunk, 0, len(chunks))
+	totalTokenNum := int64(0)
+
+	for i, c := range chunks {
+		// 7.1 生成唯一 ID (UUID v7)
+		chunkUuid, uuidErr := uuid.NewV7()
+		if uuidErr != nil {
+			return failTask(fmt.Sprintf("生成UUID失败: %v", uuidErr))
+		}
+
+		// 7.2 解析元数据
+		meta := c.MetaData
+		var questionKw []string
+
+		// 7.3 提取 QA 问题关键词
+		if qaPairs, ok := meta["qa_pairs"].([]interface{}); ok {
+			for _, qa := range qaPairs {
+				if qaMap, ok := qa.(map[string]interface{}); ok {
+					if question, ok := qaMap["question"].(string); ok {
+						questionKw = append(questionKw, question)
+					}
+				}
+			}
+		}
+
+		// 7.4 计算 token 数 (简单估算: content 长度 / 4)
+		tokenNum := int64(len(c.Content) / 4)
+		totalTokenNum += tokenNum
+
+		// 7.5 构造 ES Chunk 对象
+		saveChunks = append(saveChunks, &chunk.Chunk{
+			Id:            chunkUuid.String(),
+			DocId:         msg.DocumentId,
+			KbIds:         []string{msg.KnowledgeBaseId},
+			Content:       c.Content,
+			ContentVector: contentVectors[i],
+			DocName:       doc.DocName.String,
+			ImportantKw:   nil, // 可后续提取
+			QuestionKw:    questionKw,
+			ImgId:         "",
+			PageNum:       nil,
+			CreateTime:    float64(time.Now().Unix()),
+			Available:     1,
+			Score:         0,
+		})
+	}
+
+	// 8. 为 QA 问题生成向量并作为独立 Chunk 写入 (可选优化)
+	// 遍历所有 chunks，找到有 qa_pairs 的，为每个 question 生成向量
+	for _, c := range chunks {
+		meta := c.MetaData
+		if qaPairs, ok := meta["qa_pairs"].([]types.QAItem); ok && len(qaPairs) > 0 {
+			// 提取所有 questions
+			questions := make([]string, 0, len(qaPairs))
+			questions = slicex.Into(qaPairs, func(t types.QAItem) string {
+				return t.Question
+			})
+
+			if len(questions) > 0 {
+				// 批量生成 QA 向量
+				qaVectors, qaErr := embedder.EmbedStrings(ctx, questions)
+				if qaErr != nil {
+					logx.Errorf("生成QA向量失败: %v", qaErr)
+					continue // 跳过，不影响主流程
+				}
+
+				// 为每个 question 创建独立 chunk
+				for j, question := range questions {
+					qaUuid, _ := uuid.NewV7()
+					saveChunks = append(saveChunks, &chunk.Chunk{
+						Id:            qaUuid.String(),
+						DocId:         msg.DocumentId,
+						KbIds:         []string{msg.KnowledgeBaseId},
+						Content:       question, // QA 问题作为内容
+						ContentVector: qaVectors[j],
+						DocName:       doc.DocName.String,
+						ImportantKw:   nil,
+						QuestionKw:    nil,
+						ImgId:         "",
+						PageNum:       nil,
+						CreateTime:    float64(time.Now().Unix()),
+						Available:     1,
+						Score:         0,
+					})
+				}
+			}
+		}
+	}
+
+	// 9. 写入 ES
+	if err := l.svcCtx.ChunkModel.Put(ctx, saveChunks); err != nil {
+		return failTask(fmt.Sprintf("写入ES失败: %v", err))
+	}
+
+	// 10. 更新 MySQL 状态
+	err = l.svcCtx.KnowledgeDocumentModel.UpdateStatusWithChunkCount(ctx, documentId, knowledge_document.RunStateSuccess, int64(len(chunks)), totalTokenNum)
+	if err != nil {
+		// 回滚 ES 数据
+		logx.Errorf("[DocIndex] MySQL 更新失败，回滚 ES 数据: %v", err)
+		_ = l.svcCtx.ChunkModel.DeleteByDocId(ctx, msg.KnowledgeBaseId, documentId)
+		return failTask(fmt.Sprintf("更新数据库失败: %v", err))
 	}
 
 	// 记录成功指标
 	metric.IndexingDuration.WithLabelValues(kbId, "success").Observe(time.Since(start).Seconds())
 	metric.ChunksIndexed.WithLabelValues(kbId).Observe(float64(len(saveChunks)))
 
-	logx.Infof("[DocIndex] DocumentId=%s 索引成功. Chunks=%d", documentId, len(saveChunks))
+	logx.Infof("[DocIndex] DocumentId=%s 索引成功. Chunks=%d, QAChunks=%d", documentId, len(chunks), len(saveChunks)-len(chunks))
 	return nil
 }
 

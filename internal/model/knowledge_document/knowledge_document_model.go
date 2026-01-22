@@ -23,6 +23,7 @@ type (
 		CountByKnowledgeBaseId(ctx context.Context, kbId string) (int64, error)
 		FindManyByIdsAndKbId(ctx context.Context, ids []string, kbId string) ([]*KnowledgeDocument, error)
 		UpdateRunStatus(ctx context.Context, id, status, msg string) error
+		UpdateStatusWithChunkCount(ctx context.Context, id, status string, chunkNum, tokenNum int64) error
 	}
 
 	customKnowledgeDocumentModel struct {
@@ -106,6 +107,17 @@ func (m *customKnowledgeDocumentModel) UpdateRunStatus(ctx context.Context, id, 
 		query := fmt.Sprintf("update %s set run_status = ?, progress_msg = ?, updated_time = ?, updated_date = ? where `id` = ?", m.table)
 		now := time.Now()
 		return conn.ExecCtx(ctx, query, status, msg, now.UnixMilli(), now, id)
+	}, knowledgeDocumentIdKey)
+	return err
+}
+
+// UpdateStatusWithChunkCount 更新文档状态及切片统计
+func (m *customKnowledgeDocumentModel) UpdateStatusWithChunkCount(ctx context.Context, id, status string, chunkNum, tokenNum int64) error {
+	knowledgeDocumentIdKey := fmt.Sprintf("%s%v", cacheKnowledgeDocumentIdPrefix, id)
+	_, err := m.ExecCtx(ctx, func(ctx context.Context, conn sqlx.SqlConn) (result sql.Result, err error) {
+		query := fmt.Sprintf("update %s set run_status = ?, chunk_num = ?, token_num = ?, updated_time = ?, updated_date = ? where `id` = ?", m.table)
+		now := time.Now()
+		return conn.ExecCtx(ctx, query, status, chunkNum, tokenNum, now.UnixMilli(), now, id)
 	}, knowledgeDocumentIdKey)
 	return err
 }
