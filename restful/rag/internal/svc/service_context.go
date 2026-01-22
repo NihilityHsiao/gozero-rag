@@ -83,7 +83,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	esModel, err := chunk.NewEsChunkModel(c.ElasticSearch.Addresses, c.ElasticSearch.Username, c.ElasticSearch.Password)
 	if err != nil {
 		logx.Errorf("Failed to init Elasticsearch: %v", err)
-		// panic(err) // Optional: panic if ES is mandatory
+		panic(err) // ES is mandatory
 	}
 
 	ctx := context.Background()
