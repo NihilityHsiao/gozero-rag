@@ -2,8 +2,6 @@ package logic
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"gozero-rag/consumer/document_index/internal/svc"
@@ -20,6 +18,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/cloudwego/eino-ext/components/embedding/openai"
 
 	"github.com/cloudwego/eino/schema"
@@ -244,19 +243,10 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 		// 7.1 生成唯一 ID (Hash based)
 		// id = "chunk-" + hash(chunk原文 + doc_id)
 		hashStr := fmt.Sprintf("%s-%s", c.Content, msg.DocumentId)
-		hash := md5.Sum([]byte(hashStr))
-		chunkId := "chunk-" + hex.EncodeToString(hash[:])
+		hash := xxhash.Sum64String(hashStr)
+		chunkId := "chunk-" + fmt.Sprintf("%x", hash)
 
 		// 7.2 解析元数据
-		meta := c.MetaData
-		var questionKw []string
-
-		// 7.3 提取 QA 问题关键词
-		if qaPairs, ok := meta["qa_pairs"].([]types.QAItem); ok {
-			for _, qa := range qaPairs {
-				questionKw = append(questionKw, qa.Question)
-			}
-		}
 
 		// 7.4 计算 token 数 (简单估算: content 长度 / 4)
 		tokenNum := int64(len(c.Content) / 4)
@@ -271,7 +261,7 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 			ContentVector: contentVectors[i],
 			DocName:       doc.DocName.String,
 			ImportantKw:   nil, // 可后续提取
-			QuestionKw:    questionKw,
+			QuestionKw:    nil,
 			ImgId:         "",
 			PageNum:       nil,
 			CreateTime:    float64(time.Now().Unix()),
@@ -304,8 +294,8 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 					// id = hash("qa-" + question + answer + doc_id)
 					answer := qaPairs[j].Answer
 					qaHashStr := fmt.Sprintf("%s-%s-%s", question, answer, msg.DocumentId)
-					qaHash := md5.Sum([]byte(qaHashStr))
-					qaId := "qa-" + hex.EncodeToString(qaHash[:])
+					qaHash := xxhash.Sum64String(qaHashStr)
+					qaId := "qa-" + fmt.Sprintf("%x", qaHash)
 
 					// content: "Question:xxx? Answer:xxxx"
 					qaContent := fmt.Sprintf("Question:%s? Answer:%s", question, answer)
