@@ -14,6 +14,7 @@ interface ChunkCardProps {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { preprocessMarkdown } from '@/utils/markdownUtils';
 
 class MarkdownErrorBoundary extends React.Component<
     { children: React.ReactNode; fallback: React.ReactNode },
@@ -89,7 +90,7 @@ const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, selected, onSelect, onEdit
                                         a: ({ node, ...props }) => <a {...props} onClick={(e) => e.stopPropagation()} target="_blank" className="text-blue-500 hover:underline" />,
                                     }}
                                 >
-                                    {displayContent}
+                                    {preprocessMarkdown(displayContent)}
                                 </ReactMarkdown>
                             </div>
                         </MarkdownErrorBoundary>

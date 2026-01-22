@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { preprocessMarkdown } from '@/utils/markdownUtils';
 
 class MarkdownErrorBoundary extends React.Component<
     { children: React.ReactNode; fallback: React.ReactNode },
@@ -188,7 +189,7 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
                                                         img: ({ node, ...props }) => <span className="text-xs text-gray-400 block p-2 border border-dashed rounded bg-gray-50">[Image: {props.alt}]</span>,
                                                     }}
                                                 >
-                                                    {text}
+                                                    {preprocessMarkdown(text)}
                                                 </ReactMarkdown>
                                             </MarkdownErrorBoundary>
                                         </div>
