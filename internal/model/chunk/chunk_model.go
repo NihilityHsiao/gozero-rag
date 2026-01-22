@@ -18,6 +18,12 @@ type Chunk struct {
 	Score         float64   `json:"score,omitempty"` // Search score
 }
 
+// ChunkListResult 分页查询切片结果
+type ChunkListResult struct {
+	Total  int64    // 总数
+	Chunks []*Chunk // 切片列表
+}
+
 type ChunkModel interface {
 	// Put 插入或更新分片
 	Put(ctx context.Context, chunks []*Chunk) error
@@ -28,6 +34,14 @@ type ChunkModel interface {
 	// vector: 向量查询
 	// topK: 返回条数
 	HybridSearch(ctx context.Context, kbId string, query string, vector []float64, topK int) ([]*Chunk, error)
+
+	// ListByDocId 按文档ID分页查询切片
+	// kbId: 知识库ID
+	// docId: 文档ID
+	// keyword: 关键词搜索 (可选)
+	// page: 页码 (从1开始)
+	// pageSize: 每页条数
+	ListByDocId(ctx context.Context, docId string, keyword string, page int64, pageSize int64) (*ChunkListResult, error)
 
 	// DeleteByDocId 按文档ID删除 (用于删除文件)
 	DeleteByDocId(ctx context.Context, kbId string, docId string) error

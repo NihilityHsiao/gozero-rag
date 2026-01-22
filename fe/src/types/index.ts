@@ -168,14 +168,16 @@ export interface ChunkMetadata {
 
 export interface KnowledgeDocumentChunkInfo {
   id: string;
-  knowledge_base_id: string;
-  knowledge_document_id: string;
-  chunk_text: string;
-  chunk_size: number;
-  metadata: ChunkMetadata;
-  status: number;
-  created_at: string;
-  updated_at: string;
+  content: string;              // 后端返回的切片内容
+  doc_id: string;               // 文档ID
+  doc_name: string;             // 文档名称
+  important_keywords: string[]; // 重要关键词
+  created_at: number;           // 创建时间戳
+  // 前端兼容字段 (可在组件中计算)
+  chunk_text?: string;          // 兼容旧代码, 实际使用 content
+  chunk_size?: number;          // 兼容旧代码, 可由 content.length 计算
+  status?: number;              // 状态 (可选)
+  metadata?: ChunkMetadata;     // 元数据 (可选)
 }
 
 export interface GetKnowledgeDocumentChunksReq {

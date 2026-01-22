@@ -136,6 +136,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: knowledge_document.DeleteKnowledgeDocumentHandler(serverCtx),
 			},
 			{
+				// 获取文档切片列表
+				Method:  http.MethodGet,
+				Path:    "/knowledge_document/:id/chunks",
+				Handler: knowledge_document.ListKnowledgeDocumentChunksHandler(serverCtx),
+			},
+			{
 				// 更新文档解析配置
 				Method:  http.MethodPut,
 				Path:    "/knowledge_document/:id/parser_config",

@@ -317,3 +317,92 @@ func (m *EsChunkModel) deleteByQuery(ctx context.Context, query map[string]inter
 	}
 	return nil
 }
+
+// ListByDocId 按文档ID分页查询切片
+func (m *EsChunkModel) ListByDocId(ctx context.Context, docId string, keyword string, page int64, pageSize int64) (*ChunkListResult, error) {
+	// 计算分页偏移量
+	from := (page - 1) * pageSize
+
+	// 构建查询条件
+	mustClauses := []map[string]interface{}{
+		{"term": map[string]interface{}{"doc_id": docId}},
+	}
+
+	// 如果有关键词，增加 match 查询
+	if keyword != "" {
+		mustClauses = append(mustClauses, map[string]interface{}{
+			"match": map[string]interface{}{
+				"content": keyword,
+			},
+		})
+	}
+
+	queryBody := map[string]interface{}{
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"must": mustClauses,
+			},
+		},
+		"from": from,
+		"size": pageSize,
+		"sort": []map[string]interface{}{
+			{"create_timestamp_flt": map[string]interface{}{"order": "asc"}},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(queryBody); err != nil {
+		return nil, err
+	}
+
+	res, err := m.client.Search(
+		m.client.Search.WithContext(ctx),
+		m.client.Search.WithIndex(m.index),
+		m.client.Search.WithBody(&buf),
+		m.client.Search.WithTrackTotalHits(true),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		return nil, fmt.Errorf("search failed: %s, body: %s", res.Status(), string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	hitsObj := result["hits"].(map[string]interface{})
+
+	// 获取总数
+	var total int64
+	switch v := hitsObj["total"].(type) {
+	case map[string]interface{}:
+		total = int64(v["value"].(float64))
+	case float64:
+		total = int64(v)
+	}
+
+	hits := hitsObj["hits"].([]interface{})
+	chunks := make([]*Chunk, 0, len(hits))
+
+	for _, hit := range hits {
+		source := hit.(map[string]interface{})["_source"]
+		sourceBytes, _ := json.Marshal(source)
+		var chunk Chunk
+		if err := json.Unmarshal(sourceBytes, &chunk); err != nil {
+			logx.Errorf("failed to unmarshal chunk: %v", err)
+			continue
+		}
+		chunks = append(chunks, &chunk)
+	}
+
+	return &ChunkListResult{
+		Total:  total,
+		Chunks: chunks,
+	}, nil
+}

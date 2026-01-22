@@ -20,11 +20,15 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
 
     useEffect(() => {
         if (chunk) {
-            setText(chunk.chunk_text);
+            // 使用 content 字段，兼容旧的 chunk_text
+            setText(chunk.content || chunk.chunk_text || '');
         }
     }, [chunk]);
 
     if (!isOpen || !chunk) return null;
+
+    // 计算字符数
+    const charCount = text.length;
 
     const handleSave = async () => {
         if (!onSave) {
@@ -69,10 +73,10 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
                             状态: <span className={chunk.status === 1 ? "text-green-600 font-medium" : "text-gray-500"}>
-                                {chunk.status === 1 ? '启用' : '禁用'}
+                                {chunk.status === 1 ? '启用' : '启用'}
                             </span>
                             {' · '}
-                            {chunk.chunk_size} 字符
+                            {charCount} 字符
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -125,11 +129,27 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
                         {activeTab === 'metadata' && (
                             <div className="bg-white rounded-lg border p-4 space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
                                 <div>
-                                    <h4 className="text-sm font-medium text-gray-500 mb-2">JSON 元数据</h4>
-                                    <pre className="bg-gray-50 p-3 rounded text-xs font-mono overflow-x-auto text-gray-700">
-                                        {JSON.stringify(chunk.metadata, null, 2)}
-                                    </pre>
+                                    <h4 className="text-sm font-medium text-gray-500 mb-2">关键词</h4>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {chunk.important_keywords && chunk.important_keywords.length > 0 ? (
+                                            chunk.important_keywords.map((kw, idx) => (
+                                                <Badge key={idx} variant="outline" className="text-xs">
+                                                    {kw}
+                                                </Badge>
+                                            ))
+                                        ) : (
+                                            <span className="text-sm text-gray-400">无关键词</span>
+                                        )}
+                                    </div>
                                 </div>
+                                {chunk.metadata && (
+                                    <div>
+                                        <h4 className="text-sm font-medium text-gray-500 mb-2">JSON 元数据</h4>
+                                        <pre className="bg-gray-50 p-3 rounded text-xs font-mono overflow-x-auto text-gray-700">
+                                            {JSON.stringify(chunk.metadata, null, 2)}
+                                        </pre>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -148,3 +168,4 @@ const EditChunkDrawer: React.FC<EditChunkDrawerProps> = ({ chunk, isOpen, onClos
 };
 
 export default EditChunkDrawer;
+

@@ -82,6 +82,15 @@ type ChatRetrieveConfig struct {
 	RerankKeywordWeight float64 `json:"rerank_keyword_weight"`
 }
 
+type ChunkInfo struct {
+	Id          string   `json:"id"`
+	Content     string   `json:"content"`
+	DocId       string   `json:"doc_id"`
+	DocName     string   `json:"doc_name"`
+	ImportantKw []string `json:"important_keywords"` // 重要关键词
+	CreatedAt   float64  `json:"created_at"`         // 创建时间戳
+}
+
 type Conversation struct {
 	Id           string `json:"id"`
 	Title        string `json:"title"`
@@ -320,6 +329,19 @@ type ListKnowledgeBaseReq struct {
 type ListKnowledgeBaseResp struct {
 	Total int64               `json:"total"`
 	List  []KnowledgeBaseInfo `json:"list"`
+}
+
+type ListKnowledgeDocumentChunksReq struct {
+	Id              string `path:"id"`                            // 文档ID
+	KnowledgeBaseId string `form:"knowledge_base_id"`             // 知识库ID
+	Page            int64  `form:"page,optional,default=1"`       // 页码
+	PageSize        int64  `form:"page_size,optional,default=20"` // 每页条数
+	Keyword         string `form:"keyword,optional"`              // 搜索切片内容
+}
+
+type ListKnowledgeDocumentChunksResp struct {
+	Total int64       `json:"total"`
+	List  []ChunkInfo `json:"list"`
 }
 
 type ListKnowledgeDocumentReq struct {

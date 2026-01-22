@@ -102,6 +102,31 @@ type (
     // 批量解析文档响应
     BatchParseDocumentResp {
     }
+
+    // 切片信息
+    ChunkInfo {
+        Id          string   `json:"id"`
+        Content     string   `json:"content"`
+        DocId       string   `json:"doc_id"`
+        DocName     string   `json:"doc_name"`
+        ImportantKw []string `json:"important_keywords"` // 重要关键词
+        CreatedAt   float64  `json:"created_at"`         // 创建时间戳
+    }
+
+    // 获取切片列表请求
+    ListKnowledgeDocumentChunksReq {
+        Id              string `path:"id"`                          // 文档ID
+        KnowledgeBaseId string `form:"knowledge_base_id"`           // 知识库ID
+        Page            int64  `form:"page,optional,default=1"`     // 页码
+        PageSize        int64  `form:"page_size,optional,default=20"` // 每页条数
+        Keyword         string `form:"keyword,optional"`            // 搜索切片内容
+    }
+
+    // 获取切片列表响应
+    ListKnowledgeDocumentChunksResp {
+        Total int64       `json:"total"`
+        List  []ChunkInfo `json:"list"`
+    }
 )
 
 @server (
@@ -138,4 +163,8 @@ service rag {
     @doc "批量解析文档"
     @handler BatchParseDocument
     post /knowledge_document/batch_parse (BatchParseDocumentReq) returns (BatchParseDocumentResp)
+
+    @doc "获取文档切片列表"
+    @handler ListKnowledgeDocumentChunks
+    get /knowledge_document/:id/chunks (ListKnowledgeDocumentChunksReq) returns (ListKnowledgeDocumentChunksResp)
 }

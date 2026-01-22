@@ -1,5 +1,5 @@
 import React from 'react';
-import type { KnowledgeDocumentInfo } from '@/types';
+import type { KnowledgeDocumentInfo, GeneralParserConfig } from '@/types';
 
 interface DocInfoSidebarProps {
     doc?: KnowledgeDocumentInfo;
@@ -17,6 +17,21 @@ const DocInfoSidebar: React.FC<DocInfoSidebarProps> = ({ doc }) => {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
+
+    const formatTime = (timestamp: number) => {
+        if (!timestamp) return '-';
+        return new Date(timestamp).toLocaleString('zh-CN');
+    };
+
+    // 解析 parser_config JSON 字符串
+    let parserConfig: GeneralParserConfig | null = null;
+    try {
+        if (doc.parser_config) {
+            parserConfig = JSON.parse(doc.parser_config);
+        }
+    } catch {
+        parserConfig = null;
+    }
 
     return (
         <div className="w-80 border-l bg-gray-50/50 h-full flex flex-col">
@@ -45,11 +60,11 @@ const DocInfoSidebar: React.FC<DocInfoSidebarProps> = ({ doc }) => {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">创建时间</span>
-                                <span className="text-xs">{doc.created_at}</span>
+                                <span className="text-xs">{formatTime(doc.created_time)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">更新时间</span>
-                                <span className="text-xs">{doc.updated_at}</span>
+                                <span className="text-xs">{formatTime(doc.updated_time)}</span>
                             </div>
                         </div>
                     </div>
@@ -59,30 +74,32 @@ const DocInfoSidebar: React.FC<DocInfoSidebarProps> = ({ doc }) => {
                     {/* Parser Config */}
                     <div className="space-y-3">
                         <h4 className="text-sm font-semibold text-gray-900">解析配置</h4>
-                        {doc.parser_config ? (
+                        {parserConfig ? (
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">最大分块长度</span>
-                                    <span>{doc.parser_config.max_chunk_length}</span>
+                                    <span>{parserConfig.chunk_token_num ?? '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">重叠</span>
-                                    <span>{doc.parser_config.chunk_overlap}</span>
+                                    <span>{parserConfig.chunk_overlap_token_num ?? '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-500">QA 生成</span>
-                                    <span>{doc.parser_config.enable_qa_generation ? '已开启' : '已禁用'}</span>
+                                    <span className="text-gray-500">布局识别</span>
+                                    <span>{parserConfig.layout_recognize ? '已开启' : '已禁用'}</span>
                                 </div>
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-gray-500">分隔符</span>
-                                    <div className="flex flex-wrap gap-1">
-                                        {doc.parser_config.separators.map((sep, idx) => (
-                                            <code key={idx} className="bg-gray-200 px-1 rounded text-xs">
-                                                {sep === '\n' ? '\\n' : sep}
-                                            </code>
-                                        ))}
+                                {parserConfig.separator && parserConfig.separator.length > 0 && (
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-gray-500">分隔符</span>
+                                        <div className="flex flex-wrap gap-1">
+                                            {parserConfig.separator.map((sep: string, idx: number) => (
+                                                <code key={idx} className="bg-gray-200 px-1 rounded text-xs">
+                                                    {sep === '\n' ? '\\n' : sep}
+                                                </code>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         ) : (
                             <div className="text-sm text-gray-400">无解析配置</div>
