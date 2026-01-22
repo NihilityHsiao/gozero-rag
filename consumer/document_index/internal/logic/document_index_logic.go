@@ -242,10 +242,10 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 
 	for i, c := range chunks {
 		// 7.1 生成唯一 ID (Hash based)
-		// id = hash("chunk-" + chunk原文 + doc_id)
-		hashStr := fmt.Sprintf("chunk-%s-%s", c.Content, msg.DocumentId)
+		// id = "chunk-" + hash(chunk原文 + doc_id)
+		hashStr := fmt.Sprintf("%s-%s", c.Content, msg.DocumentId)
 		hash := md5.Sum([]byte(hashStr))
-		chunkId := hex.EncodeToString(hash[:])
+		chunkId := "chunk-" + hex.EncodeToString(hash[:])
 
 		// 7.2 解析元数据
 		meta := c.MetaData
@@ -303,9 +303,9 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 				for j, question := range questions {
 					// id = hash("qa-" + question + answer + doc_id)
 					answer := qaPairs[j].Answer
-					qaHashStr := fmt.Sprintf("qa-%s-%s-%s", question, answer, msg.DocumentId)
+					qaHashStr := fmt.Sprintf("%s-%s-%s", question, answer, msg.DocumentId)
 					qaHash := md5.Sum([]byte(qaHashStr))
-					qaId := hex.EncodeToString(qaHash[:])
+					qaId := "qa-" + hex.EncodeToString(qaHash[:])
 
 					// content: "Question:xxx? Answer:xxxx"
 					qaContent := fmt.Sprintf("Question:%s? Answer:%s", question, answer)
@@ -317,7 +317,7 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 						Content:       qaContent, // QA 问题作为内容
 						ContentVector: qaVectors[j],
 						DocName:       doc.DocName.String,
-						ImportantKw:   nil,
+						ImportantKw:   nil, // todo: 【暂时不实现】这里可以调租户的llm模型来生成关键词, 用于稀疏检索
 						QuestionKw:    nil,
 						ImgId:         "",
 						PageNum:       nil,
