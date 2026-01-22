@@ -75,6 +75,7 @@ func (l *ListKnowledgeDocumentLogic) ListKnowledgeDocument(req *types.ListKnowle
 		req.KnowledgeBaseId,
 		int(req.Page),
 		int(req.PageSize),
+		req.Keyword,
 	)
 	if err != nil {
 		l.Errorf("查询文档列表失败: %v", err)
@@ -82,7 +83,7 @@ func (l *ListKnowledgeDocumentLogic) ListKnowledgeDocument(req *types.ListKnowle
 	}
 
 	// 统计总数
-	total, err := l.svcCtx.KnowledgeDocumentModel.CountByKnowledgeBaseId(l.ctx, req.KnowledgeBaseId)
+	total, err := l.svcCtx.KnowledgeDocumentModel.CountByKnowledgeBaseId(l.ctx, req.KnowledgeBaseId, req.Keyword)
 	if err != nil {
 		l.Errorf("统计文档数量失败: %v", err)
 		return nil, xerr.NewInternalErrMsg("统计文档数量失败")

@@ -169,7 +169,7 @@ func (g *Generator) buildUserPrompt(content string, metadata map[string]any, qaN
 
 	sb.WriteString("### 文本内容：\n")
 	sb.WriteString(content)
-	sb.WriteString(fmt.Sprintf("\n\n请基于以上内容生成 %d 个左右的高质量的问答对。", qaNum))
+	sb.WriteString(fmt.Sprintf("\n\n请基于以上内容生成 %d 个高质量的问答对。", qaNum))
 
 	return sb.String()
 }

@@ -19,8 +19,8 @@ type (
 	KnowledgeDocumentModel interface {
 		knowledgeDocumentModel
 		DeleteByKbId(ctx context.Context, kbId string) error
-		FindListByKnowledgeBaseId(ctx context.Context, kbId string, page, pageSize int) ([]*KnowledgeDocument, error)
-		CountByKnowledgeBaseId(ctx context.Context, kbId string) (int64, error)
+		FindListByKnowledgeBaseId(ctx context.Context, kbId string, page, pageSize int, keyword string) ([]*KnowledgeDocument, error)
+		CountByKnowledgeBaseId(ctx context.Context, kbId string, keyword string) (int64, error)
 		FindManyByIdsAndKbId(ctx context.Context, ids []string, kbId string) ([]*KnowledgeDocument, error)
 		UpdateRunStatus(ctx context.Context, id, status, msg string) error
 		UpdateStatusWithChunkCount(ctx context.Context, id, status string, chunkNum, tokenNum int64) error
@@ -45,12 +45,24 @@ func (m *customKnowledgeDocumentModel) DeleteByKbId(ctx context.Context, kbId st
 }
 
 // FindListByKnowledgeBaseId 根据知识库ID查询文档列表（分页）
-func (m *customKnowledgeDocumentModel) FindListByKnowledgeBaseId(ctx context.Context, kbId string, page, pageSize int) ([]*KnowledgeDocument, error) {
+func (m *customKnowledgeDocumentModel) FindListByKnowledgeBaseId(ctx context.Context, kbId string, page, pageSize int, keyword string) ([]*KnowledgeDocument, error) {
 	offset := (page - 1) * pageSize
-	query := fmt.Sprintf("select %s from %s where knowledge_base_id = ? order by created_time desc limit ?, ?", knowledgeDocumentRows, m.table)
+
+	var query string
+	var args []interface{}
+
+	if keyword != "" {
+		// 模糊搜索 doc_name 或 精确匹配 id
+		query = fmt.Sprintf("select %s from %s where knowledge_base_id = ? and (doc_name like ? or id = ?) order by created_time desc limit ?, ?", knowledgeDocumentRows, m.table)
+		likeKeyword := "%" + keyword + "%"
+		args = []interface{}{kbId, likeKeyword, keyword, offset, pageSize}
+	} else {
+		query = fmt.Sprintf("select %s from %s where knowledge_base_id = ? order by created_time desc limit ?, ?", knowledgeDocumentRows, m.table)
+		args = []interface{}{kbId, offset, pageSize}
+	}
 
 	var resp []*KnowledgeDocument
-	err := m.QueryRowsNoCacheCtx(ctx, &resp, query, kbId, offset, pageSize)
+	err := m.QueryRowsNoCacheCtx(ctx, &resp, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,11 +70,21 @@ func (m *customKnowledgeDocumentModel) FindListByKnowledgeBaseId(ctx context.Con
 }
 
 // CountByKnowledgeBaseId 统计知识库下的文档数量
-func (m *customKnowledgeDocumentModel) CountByKnowledgeBaseId(ctx context.Context, kbId string) (int64, error) {
-	query := fmt.Sprintf("select count(*) from %s where knowledge_base_id = ?", m.table)
+func (m *customKnowledgeDocumentModel) CountByKnowledgeBaseId(ctx context.Context, kbId string, keyword string) (int64, error) {
+	var query string
+	var args []interface{}
+
+	if keyword != "" {
+		query = fmt.Sprintf("select count(*) from %s where knowledge_base_id = ? and (doc_name like ? or id = ?)", m.table)
+		likeKeyword := "%" + keyword + "%"
+		args = []interface{}{kbId, likeKeyword, keyword}
+	} else {
+		query = fmt.Sprintf("select count(*) from %s where knowledge_base_id = ?", m.table)
+		args = []interface{}{kbId}
+	}
 
 	var total int64
-	err := m.QueryRowNoCacheCtx(ctx, &total, query, kbId)
+	err := m.QueryRowNoCacheCtx(ctx, &total, query, args...)
 	if err != nil {
 		return 0, err
 	}
