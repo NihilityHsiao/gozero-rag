@@ -2,6 +2,8 @@ package logic
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"gozero-rag/consumer/document_index/internal/svc"
@@ -19,7 +21,6 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/embedding/openai"
-	"github.com/gofrs/uuid/v5"
 
 	"github.com/cloudwego/eino/schema"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -240,24 +241,20 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 	totalTokenNum := int64(0)
 
 	for i, c := range chunks {
-		// 7.1 生成唯一 ID (UUID v7)
-		chunkUuid, uuidErr := uuid.NewV7()
-		if uuidErr != nil {
-			return failTask(fmt.Sprintf("生成UUID失败: %v", uuidErr))
-		}
+		// 7.1 生成唯一 ID (Hash based)
+		// id = hash("chunk-" + chunk原文 + doc_id)
+		hashStr := fmt.Sprintf("chunk-%s-%s", c.Content, msg.DocumentId)
+		hash := md5.Sum([]byte(hashStr))
+		chunkId := hex.EncodeToString(hash[:])
 
 		// 7.2 解析元数据
 		meta := c.MetaData
 		var questionKw []string
 
 		// 7.3 提取 QA 问题关键词
-		if qaPairs, ok := meta["qa_pairs"].([]interface{}); ok {
+		if qaPairs, ok := meta["qa_pairs"].([]types.QAItem); ok {
 			for _, qa := range qaPairs {
-				if qaMap, ok := qa.(map[string]interface{}); ok {
-					if question, ok := qaMap["question"].(string); ok {
-						questionKw = append(questionKw, question)
-					}
-				}
+				questionKw = append(questionKw, qa.Question)
 			}
 		}
 
@@ -267,7 +264,7 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 
 		// 7.5 构造 ES Chunk 对象
 		saveChunks = append(saveChunks, &chunk.Chunk{
-			Id:            chunkUuid.String(),
+			Id:            chunkId,
 			DocId:         msg.DocumentId,
 			KbIds:         []string{msg.KnowledgeBaseId},
 			Content:       c.Content,
@@ -304,12 +301,20 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 
 				// 为每个 question 创建独立 chunk
 				for j, question := range questions {
-					qaUuid, _ := uuid.NewV7()
+					// id = hash("qa-" + question + answer + doc_id)
+					answer := qaPairs[j].Answer
+					qaHashStr := fmt.Sprintf("qa-%s-%s-%s", question, answer, msg.DocumentId)
+					qaHash := md5.Sum([]byte(qaHashStr))
+					qaId := hex.EncodeToString(qaHash[:])
+
+					// content: "Question:xxx? Answer:xxxx"
+					qaContent := fmt.Sprintf("Question:%s? Answer:%s", question, answer)
+
 					saveChunks = append(saveChunks, &chunk.Chunk{
-						Id:            qaUuid.String(),
+						Id:            qaId,
 						DocId:         msg.DocumentId,
 						KbIds:         []string{msg.KnowledgeBaseId},
-						Content:       question, // QA 问题作为内容
+						Content:       qaContent, // QA 问题作为内容
 						ContentVector: qaVectors[j],
 						DocName:       doc.DocName.String,
 						ImportantKw:   nil,

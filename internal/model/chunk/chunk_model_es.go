@@ -42,10 +42,98 @@ func NewEsChunkModel(addresses []string, username, password string) (*EsChunkMod
 		return nil, errors.New("elasticsearch connection failed: " + res.String())
 	}
 
-	return &EsChunkModel{
+	model := &EsChunkModel{
 		client: client,
 		index:  DefaultIndexName,
-	}, nil
+	}
+
+	if err := model.SetupIndex(context.Background()); err != nil {
+		return nil, err
+	}
+
+	return model, nil
+}
+
+func (m *EsChunkModel) SetupIndex(ctx context.Context) error {
+	// Check if index exists
+	res, err := m.client.Indices.Exists([]string{m.index}, m.client.Indices.Exists.WithContext(ctx))
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	// 200 OK means exists, 404 Not Found means does not exist
+	if res.StatusCode == 200 {
+		return nil
+	}
+
+	// Define Mapping
+	mapping := map[string]interface{}{
+		"mappings": map[string]interface{}{
+			"properties": map[string]interface{}{
+				"id": map[string]interface{}{
+					"type": "keyword",
+				},
+				"doc_id": map[string]interface{}{
+					"type": "keyword",
+				},
+				"kb_ids": map[string]interface{}{
+					"type": "keyword",
+				},
+				"content": map[string]interface{}{
+					"type":            "text",
+					"analyzer":        "ik_max_word",
+					"search_analyzer": "ik_smart",
+					"fields": map[string]interface{}{
+						"keyword": map[string]interface{}{
+							"type":         "keyword",
+							"ignore_above": 256,
+						},
+					},
+				},
+				"content_vector": map[string]interface{}{
+					"type":       "dense_vector",
+					"dims":       1024,
+					"index":      true,
+					"similarity": "cosine",
+				},
+				"doc_name": map[string]interface{}{
+					"type": "keyword",
+				},
+				"question_keywords": map[string]interface{}{
+					"type":            "text",
+					"analyzer":        "ik_max_word",
+					"search_analyzer": "ik_smart",
+				},
+				"create_timestamp_flt": map[string]interface{}{
+					"type": "double",
+				},
+				"available_int": map[string]interface{}{
+					"type": "integer",
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(mapping); err != nil {
+		return err
+	}
+
+	resp, createErr := m.client.Indices.Create(
+		m.index,
+		m.client.Indices.Create.WithContext(ctx),
+		m.client.Indices.Create.WithBody(&buf),
+	)
+	if createErr != nil {
+		return createErr
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("create index failed: %s", resp.String())
+	}
+	return nil
 }
 
 func (m *EsChunkModel) Put(ctx context.Context, chunks []*Chunk) error {
