@@ -6,6 +6,7 @@ import (
 	"gozero-rag/internal/model/chunk"
 	"gozero-rag/internal/model/knowledge"
 	"gozero-rag/internal/model/knowledge_base"
+	"gozero-rag/internal/model/knowledge_document"
 	"gozero-rag/internal/model/tenant_llm"
 	"gozero-rag/internal/model/user_api"
 	"gozero-rag/internal/oss"
@@ -23,7 +24,7 @@ type ServiceContext struct {
 	OssClient                   oss.Client
 	VectorClient                vectorstore.Client
 	KnowledgeBaseModel          knowledge_base.KnowledgeBaseModel
-	KnowledgeDocumentModel      knowledge.KnowledgeDocumentModel
+	KnowledgeDocumentModel      knowledge_document.KnowledgeDocumentModel
 	KnowledgeDocumentChunkModel knowledge.KnowledgeDocumentChunkModel
 
 	ChunkModel   *chunk.EsChunkModel
@@ -69,7 +70,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		OssClient: ossClient,
 		// VectorClient:                vectorClient,
 		KnowledgeBaseModel:          knowledge_base.NewKnowledgeBaseModel(sqlConn, c.Cache),
-		KnowledgeDocumentModel:      knowledge.NewKnowledgeDocumentModel(sqlConn),
+		KnowledgeDocumentModel:      knowledge_document.NewKnowledgeDocumentModel(sqlConn, c.Cache),
 		KnowledgeDocumentChunkModel: knowledge.NewKnowledgeDocumentChunkModel(sqlConn),
 		// KnowledgeVectorModel:        vector.NewKnowledgeVectorModel(vectorClient), // New
 		ChunkModel:        esChunkModel,

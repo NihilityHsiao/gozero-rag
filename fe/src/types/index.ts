@@ -98,6 +98,8 @@ export interface GeneralParserConfig {
   chunk_overlap_token_num: number;
   separator: string[];
   layout_recognize: boolean;
+  qa_num?: number;
+  qa_llm_id?: string;
   pdf_parser: 'pdfcpu' | 'eino' | 'deepdoc';
 }
 

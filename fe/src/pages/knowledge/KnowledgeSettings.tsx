@@ -1,10 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2, Settings, FileCog, X } from 'lucide-react';
+import { Loader2, Settings, FileCog, X, Info } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +16,7 @@ import {
     FormMessage,
     FormDescription,
 } from '@/components/ui/form';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -27,10 +28,10 @@ import { Badge } from '@/components/ui/badge';
 
 import { getKnowledgeDetail, updateKnowledgeBase } from '@/api/knowledge';
 import { getUserApiList } from '@/api/user_model';
-import { listLlmFactories } from '@/api/llm';
+import { listLlmFactories, listTenantLlm } from '@/api/llm';
 import { useKnowledgeStore } from '@/store/useKnowledgeStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import type { KnowledgeBaseInfo, UserApiInfo, LlmFactoryInfo } from '@/types';
+import type { KnowledgeBaseInfo, UserApiInfo, LlmFactoryInfo, TenantLlmInfo } from '@/types';
 
 // Schema Definition
 const settingsSchema = z.object({
@@ -54,6 +55,8 @@ const settingsSchema = z.object({
     chunk_overlap_token_num: z.number().min(0).max(200),
     separator: z.array(z.string()), // Changed to array
     layout_recognize: z.boolean(),
+    qa_num: z.number().min(0).max(50).optional(),
+    qa_llm_id: z.string().optional(),
     pdf_parser: z.enum(['pdfcpu', 'eino', 'deepdoc']),
 });
 
@@ -69,26 +72,13 @@ export default function KnowledgeSettings() {
     const [loading, setLoading] = useState(true);
     const [models, setModels] = useState<UserApiInfo[]>([]);
     const [factories, setFactories] = useState<LlmFactoryInfo[]>([]);
+    const [tenantLlms, setTenantLlms] = useState<TenantLlmInfo[]>([]);
     const user = useAuthStore(state => state.userInfo);
 
     // Tag Input State
     const [tagInput, setTagInput] = useState('');
 
-    const modelGroups = useMemo(() => {
-        const groups: Record<string, UserApiInfo[]> = {
-            qa: [],
-            chat: [],
-            embedding: [],
-            rerank: [],
-            rewrite: [],
-        };
-        models.forEach(m => {
-            if (groups[m.model_type]) {
-                groups[m.model_type].push(m);
-            }
-        });
-        return groups;
-    }, [models]);
+
 
     const form = useForm<SettingsFormValues>({
         resolver: zodResolver(settingsSchema),
@@ -107,6 +97,8 @@ export default function KnowledgeSettings() {
             chunk_overlap_token_num: 64,
             separator: ['\\n\\n', '\\n', ' ', ''], // Default separators as array
             layout_recognize: true,
+            qa_num: 0,
+            qa_llm_id: '',
             pdf_parser: 'eino',
         },
     });
@@ -160,6 +152,8 @@ export default function KnowledgeSettings() {
                     chunk_overlap_token_num: parserConfig.chunk_overlap_token_num ?? 64,
                     separator: separatorList,
                     layout_recognize: parserConfig.layout_recognize ?? true,
+                    qa_num: parserConfig.qa_num ?? 0,
+                    qa_llm_id: parserConfig.qa_llm_id || '',
                     pdf_parser: parserConfig.pdf_parser || 'eino',
                 });
             } catch (error) {
@@ -181,6 +175,10 @@ export default function KnowledgeSettings() {
         listLlmFactories()
             .then(res => setFactories(res.list || []))
             .catch(err => console.error('Failed to load factories:', err));
+
+        listTenantLlm({ model_type: 'LLM', status: 1 })
+            .then(res => setTenantLlms(res.list || []))
+            .catch(err => console.error('Failed to load tenant llms:', err));
     }, [user?.user_id]);
 
     const onSubmit = async (data: SettingsFormValues) => {
@@ -192,6 +190,8 @@ export default function KnowledgeSettings() {
                 parserConfig.chunk_overlap_token_num = data.chunk_overlap_token_num;
                 parserConfig.separator = data.separator; // Save as array
                 parserConfig.layout_recognize = data.layout_recognize;
+                parserConfig.qa_num = data.qa_num;
+                parserConfig.qa_llm_id = data.qa_llm_id;
                 parserConfig.pdf_parser = data.pdf_parser;
             } else {
                 parserConfig.pdf_parser = data.pdf_parser;
@@ -475,6 +475,58 @@ export default function KnowledgeSettings() {
                                                         <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                                                     </FormItem>
                                                 )} />
+
+                                                <div className="pt-4 border-t">
+                                                    <FormField control={form.control} name="qa_num" render={({ field }) => (
+                                                        <FormItem>
+                                                            <div className="flex justify-between">
+                                                                <FormLabel>QA 生成数量 (Pre-generated QA)</FormLabel>
+                                                                <span className="text-xs font-mono text-muted-foreground">{field.value}</span>
+                                                            </div>
+                                                            <FormControl>
+                                                                <Slider
+                                                                    min={0}
+                                                                    max={50}
+                                                                    step={1}
+                                                                    value={[field.value || 0]}
+                                                                    onValueChange={(vals) => field.onChange(vals[0])}
+                                                                    disabled={!tenantLlms.length}
+                                                                />
+                                                            </FormControl>
+                                                            <FormDescription>
+                                                                每个分片生成的 QA 对数量。
+                                                                {tenantLlms.length === 0 && <span className="text-destructive ml-1">未检测到可用生成模型，无法启用。</span>}
+                                                            </FormDescription>
+                                                        </FormItem>
+                                                    )} />
+
+                                                    {(form.watch('qa_num') || 0) > 0 && (
+                                                        <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2">
+                                                            <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800">
+                                                                <Info className="h-4 w-4 text-yellow-600" />
+                                                                <AlertTitle>费用提示</AlertTitle>
+                                                                <AlertDescription className="text-xs">开启 QA 生成会显著增加 LLM Token 消耗，导致产生额外费用。请确保所选模型额度充足。</AlertDescription>
+                                                            </Alert>
+
+                                                            <FormField control={form.control} name="qa_llm_id" render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>生成模型</FormLabel>
+                                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                                        <FormControl><SelectTrigger><SelectValue placeholder="选择模型" /></SelectTrigger></FormControl>
+                                                                        <SelectContent>
+                                                                            {tenantLlms.map((model) => (
+                                                                                <SelectItem key={model.id} value={`${model.llm_name}@${model.llm_factory}`}>
+                                                                                    {model.llm_name} @ {model.llm_factory}
+                                                                                </SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )} />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
 
