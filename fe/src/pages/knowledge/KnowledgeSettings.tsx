@@ -58,6 +58,14 @@ const settingsSchema = z.object({
     qa_num: z.number().min(0).max(50).optional(),
     qa_llm_id: z.string().optional(),
     pdf_parser: z.enum(['pdfcpu', 'eino', 'deepdoc']),
+}).superRefine((val, ctx) => {
+    if ((val.qa_num || 0) > 0 && !val.qa_llm_id) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "开启 QA 生成时必须选择模型",
+            path: ["qa_llm_id"],
+        });
+    }
 });
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;

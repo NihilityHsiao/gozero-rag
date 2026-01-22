@@ -18,5 +18,5 @@ type Config struct {
 
 	ElasticSearch commonconf.ElasticSearchConf
 
-	VectorStore commonconf.VectorStoreConf
+	//VectorStore commonconf.VectorStoreConf
 }

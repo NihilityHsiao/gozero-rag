@@ -71,7 +71,7 @@ func (c *QaChecker) Check(ctx context.Context, input []*schema.Document) (output
 	if conf.LlmConfig.QaKey != "" && len(needQAChunks) > 0 {
 		generator := NewGenerator(conf, knowledgeName)
 
-		qaPairsResults, err := generator.GenerateBatch(ctx, needQAChunks)
+		qaPairsResults, err := generator.GenerateBatch(ctx, needQAChunks, conf.QaNum)
 		if err != nil {
 			logx.Errorf("[QaChecker] 批量生成 QA 失败: %v", err)
 			// 不阻塞流程，继续处理

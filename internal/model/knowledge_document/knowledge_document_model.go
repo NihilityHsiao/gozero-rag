@@ -2,8 +2,10 @@ package knowledge_document
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/stores/cache"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
@@ -20,6 +22,7 @@ type (
 		FindListByKnowledgeBaseId(ctx context.Context, kbId string, page, pageSize int) ([]*KnowledgeDocument, error)
 		CountByKnowledgeBaseId(ctx context.Context, kbId string) (int64, error)
 		FindManyByIdsAndKbId(ctx context.Context, ids []string, kbId string) ([]*KnowledgeDocument, error)
+		UpdateRunStatus(ctx context.Context, id, status, msg string) error
 	}
 
 	customKnowledgeDocumentModel struct {
@@ -94,4 +97,15 @@ func (m *customKnowledgeDocumentModel) FindManyByIdsAndKbId(ctx context.Context,
 		return nil, err
 	}
 	return resp, nil
+}
+
+// UpdateRunStatus 更新文档运行状态
+func (m *customKnowledgeDocumentModel) UpdateRunStatus(ctx context.Context, id, status, msg string) error {
+	knowledgeDocumentIdKey := fmt.Sprintf("%s%v", cacheKnowledgeDocumentIdPrefix, id)
+	_, err := m.ExecCtx(ctx, func(ctx context.Context, conn sqlx.SqlConn) (result sql.Result, err error) {
+		query := fmt.Sprintf("update %s set run_status = ?, progress_msg = ?, updated_time = ?, updated_date = ? where `id` = ?", m.table)
+		now := time.Now()
+		return conn.ExecCtx(ctx, query, status, msg, now.UnixMilli(), now, id)
+	}, knowledgeDocumentIdKey)
+	return err
 }

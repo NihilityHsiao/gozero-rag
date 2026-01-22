@@ -28,7 +28,7 @@ func NewGenerator(config types.ProcessConfig, knowledgeName string) *Generator {
 }
 
 // Generate 为单个 chunk 生成 QA 问答对
-func (g *Generator) Generate(ctx context.Context, doc *schema.Document) ([]types.QAItem, error) {
+func (g *Generator) Generate(ctx context.Context, doc *schema.Document, qaNum int) ([]types.QAItem, error) {
 	// 创建 ChatModel
 	model, err := g.createChatModel(ctx)
 	if err != nil {
@@ -36,7 +36,7 @@ func (g *Generator) Generate(ctx context.Context, doc *schema.Document) ([]types
 	}
 
 	// 构建用户消息 (包含 metadata 上下文)
-	userContent := g.buildUserPrompt(doc.Content, doc.MetaData)
+	userContent := g.buildUserPrompt(doc.Content, doc.MetaData, qaNum)
 
 	// 构建消息
 	messages := []*schema.Message{
@@ -69,11 +69,11 @@ func (g *Generator) Generate(ctx context.Context, doc *schema.Document) ([]types
 }
 
 // GenerateBatch 批量为多个 chunk 生成 QA
-func (g *Generator) GenerateBatch(ctx context.Context, docs []*schema.Document) ([][]types.QAItem, error) {
+func (g *Generator) GenerateBatch(ctx context.Context, docs []*schema.Document, qaNum int) ([][]types.QAItem, error) {
 	results := make([][]types.QAItem, len(docs))
 
 	for i, doc := range docs {
-		qaPairs, err := g.Generate(ctx, doc)
+		qaPairs, err := g.Generate(ctx, doc, qaNum)
 		if err != nil {
 			logx.Errorf("生成第 %d 个 chunk 的 QA 失败: %v", i, err)
 			// 失败不阻塞，继续处理其他 chunk
@@ -90,14 +90,7 @@ func (g *Generator) GenerateBatch(ctx context.Context, docs []*schema.Document) 
 func (g *Generator) createChatModel(ctx context.Context) (*openai.ChatModel, error) {
 	// 使用配置中的 LLM 设置
 	baseURL := g.config.LlmConfig.QaBaseUrl
-	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
-	}
-
 	modelName := g.config.LlmConfig.QaModelName
-	if modelName == "" {
-		modelName = "gpt-4o-mini"
-	}
 
 	model, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		APIKey:  g.config.LlmConfig.QaKey,
@@ -120,7 +113,7 @@ func (g *Generator) buildSystemPrompt() string {
 1. **格式严格**：必须输出标准的 JSON 数组格式，不要包含 Markdown 标记（如 '''json）。
 2. **独立性（关键）**：生成的问题必须是"独立可理解的"。
    - ❌ 错误案例："由于这个原因，导致了什么后果？"（脱离原文不知道"这个原因"是指什么）
-   - ✅ 正确案例："在《%s》中，导致服务器宕机的主要原因是什么？"（补全了主语和背景）
+   - ✅ 正确案例："在《%s》中，导致服务器宕机的主要原因是什么？"（补全了主语和背景,如果知识库名称为空,就只需要生成问题，而不需要指定知识库名称）
 3. **内容来源**：严格基于文本，不要使用外部知识。
 4. **多样性**：
    - 包含事实型问题（What, When, Who）
@@ -143,7 +136,7 @@ func (g *Generator) buildSystemPrompt() string {
 }
 
 // buildUserPrompt 构建用户消息 (包含 metadata 上下文)
-func (g *Generator) buildUserPrompt(content string, metadata map[string]any) string {
+func (g *Generator) buildUserPrompt(content string, metadata map[string]any, qaNum int) string {
 	var sb strings.Builder
 
 	// 如果有 metadata，先展示上下文信息
@@ -176,7 +169,7 @@ func (g *Generator) buildUserPrompt(content string, metadata map[string]any) str
 
 	sb.WriteString("### 文本内容：\n")
 	sb.WriteString(content)
-	sb.WriteString("\n\n请基于以上内容生成 3-5 个高质量的问答对。")
+	sb.WriteString(fmt.Sprintf("\n\n请基于以上内容生成 %d 个左右的高质量的问答对。", qaNum))
 
 	return sb.String()
 }

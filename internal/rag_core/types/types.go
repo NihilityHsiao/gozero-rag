@@ -26,6 +26,7 @@ type ProcessLlmConfig struct {
 type ProcessConfig struct {
 	KnowledgeName string // 知识库名称
 	EnableQACheck bool   // 是否启用 QA 检查
+	QaNum         int
 
 	Separators     []string
 	ChunkOverlap   int
