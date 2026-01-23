@@ -22,7 +22,7 @@ func TestNewGraphExtractor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	g, err := NewGraphExtractor(ctx, llm)
+	g, err := NewGraphExtractor(ctx)
 
 	extract, err1 := g.Extract(ctx, []*chunk.Chunk{
 		{
@@ -42,7 +42,7 @@ Eino 已成为字节跳动内部大模型应用的首选全代码开发框架，
 			Content: `在 Eino 编排场景中，每个组件成为了“节点”（Node），节点之间 1 对 1 的流转关系成为了“边”（Edge），N 选 1 的流转关系成为了“分支”（Branch）。基于 Eino 开发的应用，经过对各种组件的灵活编排，就像一支足球队可以采用各种阵型，能够支持无限丰富的业务场景。
 足球队的战术千变万化，但却有迹可循，有的注重控球，有的简单直接。对 Eino 而言，针对不同的业务形态，也有更合适的编排方式`,
 		},
-	})
+	}, llm)
 	if err1 != nil {
 		t.Error(err1)
 		return

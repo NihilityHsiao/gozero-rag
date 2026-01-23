@@ -19,7 +19,6 @@ import (
 )
 
 type GraphExtractor struct {
-	llm      model.ToolCallingChatModel
 	runnable compose.Runnable[GraphInput, GraphOutput]
 }
 
@@ -44,11 +43,12 @@ type GraphExtractionState struct {
 	IsDone        bool
 	CurrentPrompt []*schema.Message
 	CurrentOutput string
+	LLM           model.ToolCallingChatModel
 }
 
 const MaxLoops = 3
 
-func NewGraphExtractor(ctx context.Context, llm model.ToolCallingChatModel) (*GraphExtractor, error) {
+func NewGraphExtractor(ctx context.Context) (*GraphExtractor, error) {
 	g := compose.NewGraph[*GraphExtractionState, *GraphExtractionState]()
 
 	_ = g.AddLambdaNode("generate_prompt", compose.InvokableLambda(func(ctx context.Context, state *GraphExtractionState) (*GraphExtractionState, error) {
@@ -68,7 +68,10 @@ func NewGraphExtractor(ctx context.Context, llm model.ToolCallingChatModel) (*Gr
 	}))
 
 	_ = g.AddLambdaNode("llm", compose.InvokableLambda(func(ctx context.Context, state *GraphExtractionState) (*GraphExtractionState, error) {
-		resp, err := llm.Generate(ctx, state.CurrentPrompt)
+		if state.LLM == nil {
+			return nil, fmt.Errorf("LLM not provided in GraphExtractionState")
+		}
+		resp, err := state.LLM.Generate(ctx, state.CurrentPrompt)
 		if err != nil {
 			return nil, err
 		}
@@ -107,10 +110,10 @@ func NewGraphExtractor(ctx context.Context, llm model.ToolCallingChatModel) (*Gr
 		return nil, err
 	}
 
-	return &GraphExtractor{llm: llm, runnable: r}, nil
+	return &GraphExtractor{runnable: r}, nil
 }
 
-func (e *GraphExtractor) Extract(ctx context.Context, chunks []*chunk.Chunk) (*types.GraphExtractionResult, error) {
+func (e *GraphExtractor) Extract(ctx context.Context, chunks []*chunk.Chunk, llm model.ToolCallingChatModel) (*types.GraphExtractionResult, error) {
 	runnable := e.runnable
 
 	result := &types.GraphExtractionResult{
@@ -125,6 +128,7 @@ func (e *GraphExtractor) Extract(ctx context.Context, chunks []*chunk.Chunk) (*t
 			History:   "",
 			LoopCount: 0,
 			IsDone:    false,
+			LLM:       llm,
 		}
 
 		for state.LoopCount < MaxLoops && !state.IsDone {
