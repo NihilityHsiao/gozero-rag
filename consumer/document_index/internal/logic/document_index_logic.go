@@ -168,6 +168,9 @@ func (l *DocumentIndexLogic) processDocument(ctx context.Context, msg *indexMess
 	}
 
 	// Step 10: 如果开启了rag生成，发送task到消息队列
+	if ic.config.GraphRag.EnableGraph {
+		// todo
+	}
 
 	// 记录成功指标
 	l.recordSuccessMetrics(ic, len(saveChunks), len(chunks))

@@ -2,7 +2,9 @@ package svc
 
 import (
 	"context"
+	"github.com/zeromicro/go-queue/kq"
 	"gozero-rag/consumer/document_index/internal/config"
+	"gozero-rag/consumer/document_index/internal/mq"
 	"gozero-rag/internal/model/chunk"
 	"gozero-rag/internal/model/knowledge"
 	"gozero-rag/internal/model/knowledge_base"
@@ -19,9 +21,11 @@ import (
 )
 
 type ServiceContext struct {
-	Config                      config.Config
-	SqlConn                     sqlx.SqlConn
-	OssClient                   oss.Client
+	Config         config.Config
+	SqlConn        sqlx.SqlConn
+	OssClient      oss.Client
+	MqPusherClient mq.Mq
+
 	VectorClient                vectorstore.Client
 	KnowledgeBaseModel          knowledge_base.KnowledgeBaseModel
 	KnowledgeDocumentModel      knowledge_document.KnowledgeDocumentModel
@@ -65,9 +69,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	return &ServiceContext{
-		Config:    c,
-		SqlConn:   sqlConn,
-		OssClient: ossClient,
+		Config:         c,
+		SqlConn:        sqlConn,
+		OssClient:      ossClient,
+		MqPusherClient: mq.NewKafka(kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)),
+
 		// VectorClient:                vectorClient,
 		KnowledgeBaseModel:          knowledge_base.NewKnowledgeBaseModel(sqlConn, c.Cache),
 		KnowledgeDocumentModel:      knowledge_document.NewKnowledgeDocumentModel(sqlConn, c.Cache),

@@ -17,6 +17,9 @@ type Config struct {
 	Oss commonconf.OssConf
 
 	ElasticSearch commonconf.ElasticSearchConf
-
+	KqPusherConf  struct {
+		Brokers []string
+		Topic   string
+	}
 	//VectorStore commonconf.VectorStoreConf
 }

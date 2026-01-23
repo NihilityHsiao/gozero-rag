@@ -308,6 +308,7 @@ services:
         echo 'Creating Kafka topics...';
         kafka-topics --bootstrap-server kafka:9092 --create --topic test.demo --partitions 1 --replication-factor 1 --if-not-exists;
         kafka-topics --bootstrap-server kafka:9092 --create --topic prod.rag.knowledge.document.index --partitions 1 --replication-factor 1 --if-not-exists;
+        kafka-topics --bootstrap-server kafka:9092 --create --topic prod.rag.knowledge.graph.extract --partitions 1 --replication-factor 1 --if-not-exists;
         echo 'Topics created successfully!';
         echo 'Listing all topics:';
         kafka-topics --bootstrap-server kafka:9092 --list;

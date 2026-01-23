@@ -46,3 +46,8 @@ KqConsumerConf:
   # go-queue 内部通过此参数控制当前消费的并发 goroutine 数量
   Processors: 8
   ForceCommit: false
+# kafka 配置
+KqPusherConf:
+  Brokers:
+    - localhost:9092
+  Topic: prod.rag.knowledge.graph.extract # 知识图谱提取
