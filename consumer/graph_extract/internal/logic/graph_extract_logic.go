@@ -1,0 +1,160 @@
+package logic
+
+import (
+	"context"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
+	"strings"
+	"time"
+
+	"gozero-rag/consumer/graph_extract/internal/svc"
+	"gozero-rag/internal/graphrag/types"
+	"gozero-rag/internal/model/graph"
+	"gozero-rag/internal/mq"
+
+	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/zeromicro/go-zero/core/logx"
+)
+
+type GraphExtractLogic struct {
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+}
+
+func NewGraphExtractLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GraphExtractLogic {
+	return &GraphExtractLogic{
+		ctx:    ctx,
+		svcCtx: svcCtx,
+	}
+}
+
+func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) error {
+	logx.Infof("consume graph extract task: %s", value)
+
+	var msg mq.GraphGenerateMsg
+	if err := json.Unmarshal([]byte(value), &msg); err != nil {
+		logx.Errorf("unmarshal graph generate msg failed: %v", err)
+		return nil // commit offset
+	}
+
+	// 1. Get LLM Config
+	parts := strings.Split(msg.LlmId, "@")
+	if len(parts) != 2 {
+		logx.Errorf("invalid llm_id format: %s", msg.LlmId)
+		return nil
+	}
+	modelName, factory := parts[0], parts[1]
+
+	tenantLlm, err := l.svcCtx.TenantLlmModel.FindByTenantFactoryName(ctx, msg.TenantId, factory, modelName)
+	if err != nil {
+		logx.Errorf("find tenant llm failed: %v", err)
+		return nil // Should we retry? For now, commit if configuration error
+	}
+
+	// 2. Initialize Chat Model
+	// Assuming OpenAI compatible interface for now as per project standard
+	llm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
+		APIKey:  tenantLlm.ApiKey.String,
+		BaseURL: tenantLlm.ApiBase.String,
+		Model:   tenantLlm.LlmName, // or tenantLlm.ModelType depending on implementation, usually specific model name
+	})
+	if err != nil {
+		logx.Errorf("init chat model failed: %v", err)
+		return err // Retryable error?
+	}
+
+	// 3. Get Chunks (Pagination loop)
+	// TODO: Handle large document pagination properly
+	// For now, fetch first 1000 chunks. If document is larger, implementation needs update.
+	chunkResult, err := l.svcCtx.ChunkModel.ListByDocId(ctx, msg.DocumentId, "", 1, 1000)
+	if err != nil {
+		logx.Errorf("list chunks failed: %v", err)
+		return err
+	}
+	if chunkResult.Total == 0 {
+		logx.Info("no chunks found for document")
+		return nil
+	}
+
+	// 4. Extract Graph
+	extractResult, err := l.svcCtx.GraphExtractor.Extract(ctx, chunkResult.Chunks, llm)
+	if err != nil {
+		logx.Errorf("extract graph failed: %v", err)
+		return err
+	}
+
+	// 5. Transform to ES Documents
+	esDocs := l.transformToEsDocs(extractResult, msg.KnowledgeBaseId)
+
+	// 6. Save to ES
+	if err := l.svcCtx.GraphModel.Put(ctx, esDocs); err != nil {
+		logx.Errorf("save graph to es failed: %v", err)
+		return err
+	}
+
+	logx.Infof("graph extraction completed for doc: %s", msg.DocumentId)
+	return nil
+}
+
+func (l *GraphExtractLogic) transformToEsDocs(result *types.GraphExtractionResult, kbId string) []*graph.EsGraphDocument {
+	docs := make([]*graph.EsGraphDocument, 0, len(result.Entities)+len(result.Relations))
+
+	// Entities
+	for _, entity := range result.Entities {
+		id := l.genEntityId(kbId, entity.Name)
+		doc := &graph.EsGraphDocument{
+			Id:          id, // Use deterministic ID for upsert
+			KbId:        kbId,
+			GraphType:   "entity",
+			EntityName:  entity.Name,
+			Description: entity.Description,
+			Weight:      1.0, // Default weight for entity
+			SourceIds:   entity.SourceId,
+			UpdatedAt:   l.nowStr(), // ISO8601 or similar? ES accepts various formats. Default to string? Or use int64.
+			// Let's rely on ES current time? No, script helper needs 'now'.
+			// Better use standard time format.
+		}
+		// Content backup
+		contentBytes, _ := json.Marshal(entity)
+		doc.ContentWithWeight = string(contentBytes)
+		docs = append(docs, doc)
+	}
+
+	// Relations
+	for _, rel := range result.Relations {
+		id := l.genRelationId(kbId, rel.SrcId, rel.DstId)
+		doc := &graph.EsGraphDocument{
+			Id:          id,
+			KbId:        kbId,
+			GraphType:   "relation",
+			SrcName:     rel.SrcId,
+			DstName:     rel.DstId,
+			Description: rel.Description,
+			Weight:      rel.Weight,
+			SourceIds:   rel.SourceId,
+			UpdatedAt:   l.nowStr(),
+		}
+		contentBytes, _ := json.Marshal(rel)
+		doc.ContentWithWeight = string(contentBytes)
+		docs = append(docs, doc)
+	}
+
+	return docs
+}
+
+func (l *GraphExtractLogic) genEntityId(kbId, name string) string {
+	// Prefix: entity_
+	hash := md5.Sum([]byte(kbId + name))
+	return "entity_" + hex.EncodeToString(hash[:])
+}
+
+func (l *GraphExtractLogic) genRelationId(kbId, src, dst string) string {
+	// Prefix: relation_
+	hash := md5.Sum([]byte(kbId + src + dst))
+	return "relation_" + hex.EncodeToString(hash[:])
+}
+
+func (l *GraphExtractLogic) nowStr() string {
+	return time.Now().Format(time.RFC3339)
+}

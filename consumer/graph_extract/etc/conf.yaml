@@ -1,0 +1,25 @@
+Name: graph-extract-consumer
+
+KqConsumerConf:
+  Name: GraphExtractConsumer
+  Brokers:
+    - localhost:9092
+  Group: graph-extract-group
+  Topic: prod.rag.knowledge.graph.extract
+  Offset: first
+  Consumers: 1
+
+# config.yaml
+Mysql:
+  DataSource: "root:root@tcp(127.0.0.1:13306)/gozero_rag?charset=utf8mb4&parseTime=True&loc=Local"
+
+Cache:
+  - Host: 127.0.0.1:6379
+    Pass: "root"
+    Type: node
+
+ElasticSearch:
+  Addresses:
+    - http://127.0.0.1:9200
+  Username:
+  Password:
