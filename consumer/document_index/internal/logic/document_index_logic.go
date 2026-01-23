@@ -4,9 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"gozero-rag/consumer/document_index/internal/svc"
 	"gozero-rag/internal/model/chunk"
-	"gozero-rag/internal/model/knowledge"
+	"gozero-rag/internal/model/knowledge_base"
 	"gozero-rag/internal/model/knowledge_document"
 	"gozero-rag/internal/mq"
 	"gozero-rag/internal/rag_core/metric"
@@ -14,16 +18,26 @@ import (
 	"gozero-rag/internal/rag_core/types"
 	"gozero-rag/internal/slicex"
 	"gozero-rag/internal/tools/llmx"
-	"os"
-	"path/filepath"
-	"time"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/cloudwego/eino-ext/components/embedding/openai"
-
+	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/schema"
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// ========================================
+// Constants
+// ========================================
+
+const (
+	defaultEmbeddingDim = 1024
+	tokenEstimateRatio  = 4 // 每 4 个字符约等于 1 个 token
+)
+
+// ========================================
+// DocumentIndexLogic 核心结构体
+// ========================================
 
 type DocumentIndexLogic struct {
 	svcCtx *svc.ServiceContext
@@ -37,181 +51,236 @@ func NewDocumentIndexLogic(svcCtx *svc.ServiceContext, ctx context.Context) *Doc
 	}
 }
 
+// ========================================
+// 消息消费入口
+// ========================================
+
 func (l *DocumentIndexLogic) Consume(_ context.Context, key, val string) (err error) {
-	var msg *mq.KnowledgeDocumentIndexMsg
-	err = json.Unmarshal([]byte(val), &msg)
+	msg, err := l.parseMessage(val)
 	if err != nil {
-		logx.Errorf("消费反序列化失败 val: %s, err: %v", val, err) // 增强日志
-		return nil                                         // 这里的 err 不需要抛给 kq，否则会一直重试。如果是格式错误，直接丢弃即可。
+		logx.Errorf("[DocIndex] 消息反序列化失败: val=%s, err=%v", val, err)
+		return nil // 格式错误直接丢弃，不重试
 	}
 
-	if msg.UserId == "" || msg.KnowledgeBaseId == "" || msg.DocumentId == "" || msg.TenantId == "" {
-		logx.Errorf("非法参数:%s", val)
+	if !msg.isValid() {
+		logx.Errorf("[DocIndex] 非法消息参数: %s", val)
 		return nil
 	}
-	logx.Infof("消费 msg: %v", msg)
-	return l.mainWork(l.ctx, msg)
+
+	logx.Infof("[DocIndex] 开始处理文档索引: DocumentId=%s", msg.DocumentId)
+	return l.processDocument(l.ctx, msg)
 }
 
-// DocParserConfig 前端传入的解析配置
-type DocParserConfig struct {
-	Separators         []string                      `json:"separators"`
-	ChunkOverlap       int                           `json:"chunk_overlap"`
-	MaxChunkLength     int                           `json:"max_chunk_length"`
-	EnableQAGeneration bool                          `json:"enable_qa_generation"`
-	PreCleanRule       types.IndexConfigPreCleanRule `json:"pre_clean_rule"`
+// ========================================
+// 内部数据结构
+// ========================================
+
+// indexMessage 索引消息的包装，提供便捷方法
+type indexMessage struct {
+	*mq.KnowledgeDocumentIndexMsg
 }
 
-// KBModelIds 知识库绑定的模型 ID
-type KBModelIds struct {
-	Qa      int64 `json:"qa"`
-	Chat    int64 `json:"chat"`
-	Rerank  int64 `json:"rerank"`
-	Rewrite int64 `json:"rewrite"`
+func (m *indexMessage) isValid() bool {
+	return m.UserId != "" && m.KnowledgeBaseId != "" && m.DocumentId != "" && m.TenantId != ""
 }
 
-func (l *DocumentIndexLogic) updateFail(ctx context.Context, docId string, reason string) {
-	// todo:需要完善 UpdateRunStatus, 修改 updated_time,updated_date, run_state, progress_msg为reason
-	_ = l.svcCtx.KnowledgeDocumentModel.UpdateRunStatus(ctx, docId, knowledge_document.RunStateFailed, reason)
-
+// indexContext 索引过程中的上下文数据
+type indexContext struct {
+	msg       *indexMessage
+	doc       *knowledge_document.KnowledgeDocument
+	kb        *knowledge_base.KnowledgeBase
+	config    *parser.ParserConfigGeneral
+	embedder  embedding.Embedder
+	qaEnabled bool
+	qaConfig  *qaModelConfig
+	startTime time.Time
 }
 
-func (l *DocumentIndexLogic) updateIndexing(ctx context.Context, docId string) {
-	// todo:
+// qaModelConfig QA 模型配置
+type qaModelConfig struct {
+	apiKey    string
+	baseUrl   string
+	modelName string
 }
 
-func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocumentIndexMsg) (err error) {
-	documentId := msg.DocumentId
+// ========================================
+// 核心处理流程
+// ========================================
 
-	// Panic Recovery: 确保 panic 不会导致文档永久停留在 indexing 状态
-	defer func() {
-		if r := recover(); r != nil {
-			//logx.Errorf("[DocIndex] DocumentId=%s panic: %v", documentId, r)
-			//_ = l.svcCtx.KnowledgeDocumentModel.UpdateStatus(ctx, documentId, knowledge_document.RunStateFailed, fmt.Sprintf("panic: %v", r))
-			err = nil // 避免重试
-		}
-	}()
-
-	start := time.Now()
-	kbId := msg.KnowledgeBaseId
-
-	// 记录索引请求总数
-	metric.IndexingTotal.WithLabelValues(kbId).Inc()
-
-	// 失败处理辅助函数
-	failTask := func(reason string) error {
-		logx.Errorf("[DocIndex] DocumentId=%s 失败: %s", documentId, reason)
-		l.updateFail(ctx, documentId, reason)
-		// 记录失败指标
-		metric.IndexingErrors.WithLabelValues(kbId, "process_error").Inc()
-		metric.IndexingDuration.WithLabelValues(kbId, "fail").Observe(time.Since(start).Seconds())
-		return nil // 返回 nil 避免重试循环
+// processDocument 文档索引主流程
+func (l *DocumentIndexLogic) processDocument(ctx context.Context, msg *indexMessage) (err error) {
+	ic := &indexContext{
+		msg:       msg,
+		startTime: time.Now(),
 	}
 
-	// 1. 检查文档状态和是否存在
-	doc, err := l.svcCtx.KnowledgeDocumentModel.FindOne(ctx, documentId)
+	// Panic Recovery
+	defer l.recoverFromPanic(ic, &err)
+
+	// 记录索引请求总数
+	metric.IndexingTotal.WithLabelValues(msg.KnowledgeBaseId).Inc()
+
+	// Step 1: 验证并获取文档
+	if err := l.loadDocument(ctx, ic); err != nil {
+		return err
+	}
+
+	// Step 2: 下载文件到临时目录
+	tempFilePath, cleanup, err := l.downloadToTemp(ctx, ic.doc)
 	if err != nil {
-		if err == knowledge.ErrNotFound {
-			return nil // 数据不存在，跳过
+		return l.failTask(ctx, ic, fmt.Sprintf("文件下载失败: %v", err))
+	}
+	defer cleanup()
+
+	// Step 3: 加载知识库和模型配置
+	if err := l.loadKnowledgeBaseConfig(ctx, ic); err != nil {
+		return l.failTask(ctx, ic, err.Error())
+	}
+
+	// Step 4: 创建 Embedder
+	if err := l.createEmbedder(ctx, ic); err != nil {
+		return l.failTask(ctx, ic, fmt.Sprintf("创建Embedder失败: %v", err))
+	}
+
+	// Step 5: 更新状态为索引中
+	l.updateRunStatus(ctx, ic.msg.DocumentId, knowledge_document.RunStateRunning, "正在索引...")
+
+	// Step 6: 解析文档并切片
+	chunks, err := l.parseDocument(ctx, ic, tempFilePath)
+	if err != nil {
+		return l.failTask(ctx, ic, fmt.Sprintf("文档解析失败: %v", err))
+	}
+
+	// Step 7: 生成向量并构建 ES Chunk
+	saveChunks, totalTokenNum, err := l.buildChunksWithEmbedding(ctx, ic, chunks)
+	if err != nil {
+		return l.failTask(ctx, ic, err.Error())
+	}
+
+	// Step 8: 写入 ES
+	if err := l.svcCtx.ChunkModel.Put(ctx, saveChunks); err != nil {
+		return l.failTask(ctx, ic, fmt.Sprintf("写入ES失败: %v", err))
+	}
+
+	// Step 9: 更新 MySQL 状态
+	if err := l.finalizeDocument(ctx, ic, len(chunks), totalTokenNum, saveChunks); err != nil {
+		return err
+	}
+
+	// 记录成功指标
+	l.recordSuccessMetrics(ic, len(saveChunks), len(chunks))
+	return nil
+}
+
+// ========================================
+// Step 1: 文档验证
+// ========================================
+
+func (l *DocumentIndexLogic) loadDocument(ctx context.Context, ic *indexContext) error {
+	doc, err := l.svcCtx.KnowledgeDocumentModel.FindOne(ctx, ic.msg.DocumentId)
+	if err != nil {
+		if err == knowledge_base.ErrNotFound {
+			return nil // 文档不存在，静默跳过
 		}
-		return err // 数据库错误，重试
+		return err // 数据库错误，触发重试
 	}
 
 	if doc.RunStatus != knowledge_document.RunStatePending {
-		logx.Infof("[DocIndex] DocumentId=%s status is %s, skip", documentId, doc.RunStatus)
+		logx.Infof("[DocIndex] DocumentId=%s 状态为 %s，跳过处理", ic.msg.DocumentId, doc.RunStatus)
 		return nil
 	}
 
-	// 从 MinIO 下载文件到临时目录
-	tempFile, err := os.CreateTemp("", fmt.Sprintf("rag_doc_%s_*%s", doc.Id, filepath.Ext(doc.DocName.String)))
+	ic.doc = doc
+	return nil
+}
+
+// ========================================
+// Step 2: 文件下载
+// ========================================
+
+func (l *DocumentIndexLogic) downloadToTemp(ctx context.Context, doc *knowledge_document.KnowledgeDocument) (string, func(), error) {
+	ext := filepath.Ext(doc.DocName.String)
+	tempFile, err := os.CreateTemp("", fmt.Sprintf("rag_doc_%s_*%s", doc.Id, ext))
 	if err != nil {
-		return failTask(fmt.Sprintf("创建临时文件失败: %v", err))
+		return "", nil, fmt.Errorf("创建临时文件失败: %w", err)
 	}
-	defer func() {
+
+	cleanup := func() {
 		tempFile.Close()
 		os.Remove(tempFile.Name())
-	}()
+	}
 
 	err = l.svcCtx.OssClient.FGetObject(ctx, l.svcCtx.Config.Oss.BucketName, doc.StoragePath.String, tempFile.Name())
 	if err != nil {
-		return failTask(fmt.Sprintf("从 MinIO 下载失败: %v", err))
+		cleanup()
+		return "", nil, fmt.Errorf("从 MinIO 下载失败: %w", err)
 	}
-	logx.Infof("[DocIndex] 从 MinIO 下载 %s 到 %s", doc.StoragePath.String, tempFile.Name())
 
-	// 3. 获取模型配置
+	logx.Infof("[DocIndex] 文件下载完成: %s -> %s", doc.StoragePath.String, tempFile.Name())
+	return tempFile.Name(), cleanup, nil
+}
 
-	kb, err := l.svcCtx.KnowledgeBaseModel.FindOne(ctx, msg.KnowledgeBaseId)
+// ========================================
+// Step 3: 知识库配置加载
+// ========================================
+
+func (l *DocumentIndexLogic) loadKnowledgeBaseConfig(ctx context.Context, ic *indexContext) error {
+	// 获取知识库
+	kb, err := l.svcCtx.KnowledgeBaseModel.FindOne(ctx, ic.msg.KnowledgeBaseId)
 	if err != nil {
-		return failTask(fmt.Sprintf("知识库未找到: %v", err))
+		return fmt.Errorf("知识库未找到: %w", err)
+	}
+	ic.kb = kb
+
+	// 解析 Parser 配置
+	if kb.ParserId != parser.ParserIdGeneral {
+		return fmt.Errorf("尚不支持该解析类型: %s", kb.ParserId)
 	}
 
-	// 解析知识库绑定的模型 ID
-	// embid: 模型名称@厂商
-	embModelName, embModelFactory := llmx.GetModelNameFactory(kb.EmbdId)
+	var config parser.ParserConfigGeneral
+	if err := json.Unmarshal([]byte(kb.ParserConfig.String), &config); err != nil {
+		return fmt.Errorf("解析配置无效: %w", err)
+	}
+	ic.config = &config
 
-	llmModel, err := l.svcCtx.TenantLlmModel.FindOneByTenantIdLlmFactoryLlmName(ctx, kb.TenantId, embModelFactory, embModelName)
+	// 加载 QA 模型配置（可选）
+	l.loadQAConfig(ctx, ic)
+
+	return nil
+}
+
+func (l *DocumentIndexLogic) loadQAConfig(ctx context.Context, ic *indexContext) {
+	if ic.config.QaNum <= 0 {
+		return
+	}
+
+	modelName, factory := llmx.GetModelNameFactory(ic.config.QaLlmId)
+	qaModel, err := l.svcCtx.TenantLlmModel.FindOneByTenantIdLlmFactoryLlmName(ctx, ic.kb.TenantId, factory, modelName)
 	if err != nil {
-		return failTask(fmt.Sprintf("模型未找到: %v", err))
+		logx.Infof("[DocIndex] QA 模型未配置或获取失败，跳过 QA 生成")
+		return
 	}
 
-	var conf parser.ParserConfigGeneral
-	if kb.ParserId == parser.ParserIdGeneral {
-		err = json.Unmarshal([]byte(kb.ParserConfig.String), &conf)
-		if err != nil {
-			return failTask(fmt.Sprintf("解析配置无效: %v", err))
-		}
-	} else {
-		return failTask(fmt.Sprintf("尚不支持该解析类型: %s", kb.ParserId))
+	ic.qaEnabled = true
+	ic.qaConfig = &qaModelConfig{
+		apiKey:    qaModel.ApiKey.String,
+		baseUrl:   qaModel.ApiBase.String,
+		modelName: modelName,
 	}
+}
 
-	// 获取 QA 模型（可选）
-	enableQa := false
-	qaKey := ""
-	qaBaseUrl := ""
-	qaModelName := ""
-	if conf.QaNum > 0 {
-		name, qaModelFactory := llmx.GetModelNameFactory(conf.QaLlmId)
-		qaModel, qaErr := l.svcCtx.TenantLlmModel.FindOneByTenantIdLlmFactoryLlmName(ctx, kb.TenantId, qaModelFactory, name)
-		if qaErr == nil {
-			enableQa = true
-			qaKey = qaModel.ApiKey.String
-			qaBaseUrl = qaModel.ApiBase.String
-			qaModelName = name
-		}
-	}
+// ========================================
+// Step 4: 创建 Embedder
+// ========================================
 
-	// 4. 更新状态为索引中
-	l.updateIndexing(ctx, documentId)
-
-	// 5. 调用文档处理器
-
-	req := &types.ProcessRequest{
-		URI: tempFile.Name(),
-		IndexConfig: types.ProcessConfig{
-			KnowledgeName:  doc.DocName.String,
-			EnableQACheck:  enableQa,
-			Separators:     conf.Separator,
-			ChunkOverlap:   conf.ChunkOverlapTokenNum,
-			MaxChunkLength: conf.ChunkTokenNum,
-			QaNum:          conf.QaNum,
-			LlmConfig: types.ProcessLlmConfig{
-				EmbeddingKey:       llmModel.ApiKey.String,
-				EmbeddingBaseUrl:   llmModel.ApiBase.String,
-				EmbeddingModelName: llmModel.LlmName,
-				QaKey:              qaKey,
-				QaBaseUrl:          qaBaseUrl,
-				QaModelName:        qaModelName,
-			},
-		},
-	}
-
-	chunks, err := l.svcCtx.DocProcessService.Invoke(ctx, req)
+func (l *DocumentIndexLogic) createEmbedder(ctx context.Context, ic *indexContext) error {
+	modelName, factory := llmx.GetModelNameFactory(ic.kb.EmbdId)
+	llmModel, err := l.svcCtx.TenantLlmModel.FindOneByTenantIdLlmFactoryLlmName(ctx, ic.kb.TenantId, factory, modelName)
 	if err != nil {
-		return failTask(fmt.Sprintf("处理器执行失败: %v", err))
+		return fmt.Errorf("Embedding 模型未找到: %w", err)
 	}
 
-	// 6. 生成向量 (Embedding)
-	embDim := 1024 // 默认向量维度
+	embDim := defaultEmbeddingDim
 	embedder, err := openai.NewEmbedder(ctx, &openai.EmbeddingConfig{
 		APIKey:     llmModel.ApiKey.String,
 		BaseURL:    llmModel.ApiBase.String,
@@ -219,125 +288,213 @@ func (l *DocumentIndexLogic) mainWork(ctx context.Context, msg *mq.KnowledgeDocu
 		Dimensions: &embDim,
 	})
 	if err != nil {
-		return failTask(fmt.Sprintf("创建embedder失败: %v", err))
+		return err
 	}
 
-	// 提取所有 Chunk 的文本内容
-	contents := slicex.Into(chunks, func(c *schema.Document) string {
-		return c.Content
+	ic.embedder = embedder
+	return nil
+}
+
+// ========================================
+// Step 5: 文档解析
+// ========================================
+
+func (l *DocumentIndexLogic) parseDocument(ctx context.Context, ic *indexContext, filePath string) ([]*schema.Document, error) {
+	req := &types.ProcessRequest{
+		URI: filePath,
+		IndexConfig: types.ProcessConfig{
+			KnowledgeName:  ic.doc.DocName.String,
+			EnableQACheck:  ic.qaEnabled,
+			Separators:     ic.config.Separator,
+			ChunkOverlap:   ic.config.ChunkOverlapTokenNum,
+			MaxChunkLength: ic.config.ChunkTokenNum,
+			QaNum:          ic.config.QaNum,
+			LlmConfig:      l.buildLlmConfig(ic),
+		},
+	}
+
+	return l.svcCtx.DocProcessService.Invoke(ctx, req)
+}
+
+func (l *DocumentIndexLogic) buildLlmConfig(ic *indexContext) types.ProcessLlmConfig {
+	modelName, factory := llmx.GetModelNameFactory(ic.kb.EmbdId)
+	llmModel, _ := l.svcCtx.TenantLlmModel.FindOneByTenantIdLlmFactoryLlmName(l.ctx, ic.kb.TenantId, factory, modelName)
+
+	config := types.ProcessLlmConfig{
+		EmbeddingKey:       llmModel.ApiKey.String,
+		EmbeddingBaseUrl:   llmModel.ApiBase.String,
+		EmbeddingModelName: llmModel.LlmName,
+	}
+
+	if ic.qaConfig != nil {
+		config.QaKey = ic.qaConfig.apiKey
+		config.QaBaseUrl = ic.qaConfig.baseUrl
+		config.QaModelName = ic.qaConfig.modelName
+	}
+
+	return config
+}
+
+// ========================================
+// Step 6: 向量生成与 Chunk 构建
+// ========================================
+
+func (l *DocumentIndexLogic) buildChunksWithEmbedding(ctx context.Context, ic *indexContext, docs []*schema.Document) ([]*chunk.Chunk, int64, error) {
+	// 提取文本内容
+	contents := slicex.Into(docs, func(d *schema.Document) string {
+		return d.Content
 	})
-	contentVectors, err := embedder.EmbedStrings(ctx, contents)
+
+	// 批量生成向量
+	vectors, err := ic.embedder.EmbedStrings(ctx, contents)
 	if err != nil {
-		return failTask(fmt.Sprintf("生成embedding失败: %v", err))
+		return nil, 0, fmt.Errorf("生成 Embedding 失败: %w", err)
 	}
 
-	if len(contentVectors) != len(chunks) {
-		return failTask("embedding数量与chunk数量不一致")
+	if len(vectors) != len(docs) {
+		return nil, 0, fmt.Errorf("Embedding 数量(%d)与 Chunk 数量(%d)不一致", len(vectors), len(docs))
 	}
 
-	// 7. 构建 ES Chunks (包含 QA 向量化)
-	saveChunks := make([]*chunk.Chunk, 0, len(chunks))
-	totalTokenNum := int64(0)
+	// 构建普通 Chunks
+	saveChunks, totalTokenNum := l.buildContentChunks(ic, docs, vectors)
 
-	for i, c := range chunks {
-		// 7.1 生成唯一 ID (Hash based)
-		// id = "chunk-" + hash(chunk原文 + doc_id)
-		hashStr := fmt.Sprintf("%s-%s", c.Content, msg.DocumentId)
-		hash := xxhash.Sum64String(hashStr)
-		chunkId := "chunk-" + fmt.Sprintf("%x", hash)
+	// 构建 QA Chunks
+	qaChunks := l.buildQAChunks(ctx, ic, docs)
+	saveChunks = append(saveChunks, qaChunks...)
 
-		// 7.2 解析元数据
+	return saveChunks, totalTokenNum, nil
+}
 
-		// 7.4 计算 token 数 (简单估算: content 长度 / 4)
-		tokenNum := int64(len(c.Content) / 4)
+func (l *DocumentIndexLogic) buildContentChunks(ic *indexContext, docs []*schema.Document, vectors [][]float64) ([]*chunk.Chunk, int64) {
+	chunks := make([]*chunk.Chunk, 0, len(docs))
+	var totalTokenNum int64
+
+	now := float64(time.Now().Unix())
+
+	for i, doc := range docs {
+		chunkId := l.generateChunkId("chunk", doc.Content, ic.msg.DocumentId)
+		tokenNum := int64(len(doc.Content) / tokenEstimateRatio)
 		totalTokenNum += tokenNum
 
-		// 7.5 构造 ES Chunk 对象
-		saveChunks = append(saveChunks, &chunk.Chunk{
+		chunks = append(chunks, &chunk.Chunk{
 			Id:            chunkId,
-			DocId:         msg.DocumentId,
-			KbIds:         []string{msg.KnowledgeBaseId},
-			Content:       c.Content,
-			ContentVector: contentVectors[i],
-			DocName:       doc.DocName.String,
-			ImportantKw:   nil, // 可后续提取
-			QuestionKw:    nil,
-			ImgId:         "",
-			PageNum:       nil,
-			CreateTime:    float64(time.Now().Unix()),
+			DocId:         ic.msg.DocumentId,
+			KbIds:         []string{ic.msg.KnowledgeBaseId},
+			Content:       doc.Content,
+			ContentVector: vectors[i],
+			DocName:       ic.doc.DocName.String,
+			CreateTime:    now,
 			Available:     1,
-			Score:         0,
 		})
 	}
 
-	// 8. 为 QA 问题生成向量并作为独立 Chunk 写入 (可选优化)
-	// 遍历所有 chunks，找到有 qa_pairs 的，为每个 question 生成向量
-	for _, c := range chunks {
-		meta := c.MetaData
-		if qaPairs, ok := meta["qa_pairs"].([]types.QAItem); ok && len(qaPairs) > 0 {
-			// 提取所有 questions
-			questions := make([]string, 0, len(qaPairs))
-			questions = slicex.Into(qaPairs, func(t types.QAItem) string {
-				return t.Question
+	return chunks, totalTokenNum
+}
+
+func (l *DocumentIndexLogic) buildQAChunks(ctx context.Context, ic *indexContext, docs []*schema.Document) []*chunk.Chunk {
+	var qaChunks []*chunk.Chunk
+	now := float64(time.Now().Unix())
+
+	for _, doc := range docs {
+		qaPairs, ok := doc.MetaData["qa_pairs"].([]types.QAItem)
+		if !ok || len(qaPairs) == 0 {
+			continue
+		}
+
+		// 提取问题列表
+		questions := slicex.Into(qaPairs, func(qa types.QAItem) string {
+			return qa.Question
+		})
+
+		// 批量生成 QA 向量
+		qaVectors, err := ic.embedder.EmbedStrings(ctx, questions)
+		if err != nil {
+			logx.Errorf("[DocIndex] QA 向量生成失败: %v", err)
+			continue
+		}
+
+		// 构建 QA Chunks
+		for j, qa := range qaPairs {
+			qaId := l.generateChunkId("qa", qa.Question+qa.Answer, ic.msg.DocumentId)
+			qaContent := fmt.Sprintf("Question: %s\nAnswer: %s", qa.Question, qa.Answer)
+
+			qaChunks = append(qaChunks, &chunk.Chunk{
+				Id:            qaId,
+				DocId:         ic.msg.DocumentId,
+				KbIds:         []string{ic.msg.KnowledgeBaseId},
+				Content:       qaContent,
+				ContentVector: qaVectors[j],
+				DocName:       ic.doc.DocName.String,
+				CreateTime:    now,
+				Available:     1,
 			})
-
-			if len(questions) > 0 {
-				// 批量生成 QA 向量
-				qaVectors, qaErr := embedder.EmbedStrings(ctx, questions)
-				if qaErr != nil {
-					logx.Errorf("生成QA向量失败: %v", qaErr)
-					continue // 跳过，不影响主流程
-				}
-
-				// 为每个 question 创建独立 chunk
-				for j, question := range questions {
-					// id = hash("qa-" + question + answer + doc_id)
-					answer := qaPairs[j].Answer
-					qaHashStr := fmt.Sprintf("%s-%s-%s", question, answer, msg.DocumentId)
-					qaHash := xxhash.Sum64String(qaHashStr)
-					qaId := "qa-" + fmt.Sprintf("%x", qaHash)
-
-					// content: "Question:xxx? Answer:xxxx"
-					qaContent := fmt.Sprintf("Question:%s? Answer:%s", question, answer)
-
-					saveChunks = append(saveChunks, &chunk.Chunk{
-						Id:            qaId,
-						DocId:         msg.DocumentId,
-						KbIds:         []string{msg.KnowledgeBaseId},
-						Content:       qaContent, // QA 问题作为内容
-						ContentVector: qaVectors[j],
-						DocName:       doc.DocName.String,
-						ImportantKw:   nil, // todo: 【暂时不实现】这里可以调租户的llm模型来生成关键词, 用于稀疏检索
-						QuestionKw:    nil,
-						ImgId:         "",
-						PageNum:       nil,
-						CreateTime:    float64(time.Now().Unix()),
-						Available:     1,
-						Score:         0,
-					})
-				}
-			}
 		}
 	}
 
-	// 9. 写入 ES
-	if err := l.svcCtx.ChunkModel.Put(ctx, saveChunks); err != nil {
-		return failTask(fmt.Sprintf("写入ES失败: %v", err))
-	}
+	return qaChunks
+}
 
-	// 10. 更新 MySQL 状态
-	err = l.svcCtx.KnowledgeDocumentModel.UpdateStatusWithChunkCount(ctx, documentId, knowledge_document.RunStateSuccess, int64(len(chunks)), totalTokenNum)
+// ========================================
+// Step 7: 完成索引
+// ========================================
+
+func (l *DocumentIndexLogic) finalizeDocument(ctx context.Context, ic *indexContext, chunkCount int, totalTokenNum int64, saveChunks []*chunk.Chunk) error {
+	err := l.svcCtx.KnowledgeDocumentModel.UpdateStatusWithChunkCount(ctx, ic.msg.DocumentId, knowledge_document.RunStateSuccess, int64(chunkCount), totalTokenNum)
 	if err != nil {
-		// 回滚 ES 数据
 		logx.Errorf("[DocIndex] MySQL 更新失败，回滚 ES 数据: %v", err)
-		_ = l.svcCtx.ChunkModel.DeleteByDocId(ctx, msg.KnowledgeBaseId, documentId)
-		return failTask(fmt.Sprintf("更新数据库失败: %v", err))
+		_ = l.svcCtx.ChunkModel.DeleteByDocId(ctx, ic.msg.KnowledgeBaseId, ic.msg.DocumentId)
+		return l.failTask(ctx, ic, fmt.Sprintf("更新数据库失败: %v", err))
 	}
 
-	// 记录成功指标
-	metric.IndexingDuration.WithLabelValues(kbId, "success").Observe(time.Since(start).Seconds())
-	metric.ChunksIndexed.WithLabelValues(kbId).Observe(float64(len(saveChunks)))
-
-	logx.Infof("[DocIndex] DocumentId=%s 索引成功. Chunks=%d, QAChunks=%d", documentId, len(chunks), len(saveChunks)-len(chunks))
 	return nil
+}
+
+// ========================================
+// 辅助函数
+// ========================================
+
+func (l *DocumentIndexLogic) parseMessage(val string) (*indexMessage, error) {
+	var msg mq.KnowledgeDocumentIndexMsg
+	if err := json.Unmarshal([]byte(val), &msg); err != nil {
+		return nil, err
+	}
+	return &indexMessage{&msg}, nil
+}
+
+func (l *DocumentIndexLogic) generateChunkId(prefix, content, docId string) string {
+	hashStr := fmt.Sprintf("%s-%s", content, docId)
+	hash := xxhash.Sum64String(hashStr)
+	return fmt.Sprintf("%s-%x", prefix, hash)
+}
+
+func (l *DocumentIndexLogic) updateRunStatus(ctx context.Context, docId, status, msg string) {
+	_ = l.svcCtx.KnowledgeDocumentModel.UpdateRunStatus(ctx, docId, status, msg)
+}
+
+func (l *DocumentIndexLogic) failTask(ctx context.Context, ic *indexContext, reason string) error {
+	logx.Errorf("[DocIndex] DocumentId=%s 失败: %s", ic.msg.DocumentId, reason)
+	l.updateRunStatus(ctx, ic.msg.DocumentId, knowledge_document.RunStateFailed, reason)
+
+	// 记录失败指标
+	metric.IndexingErrors.WithLabelValues(ic.msg.KnowledgeBaseId, "process_error").Inc()
+	metric.IndexingDuration.WithLabelValues(ic.msg.KnowledgeBaseId, "fail").Observe(time.Since(ic.startTime).Seconds())
+
+	return nil // 返回 nil 避免 Kafka 重试
+}
+
+func (l *DocumentIndexLogic) recoverFromPanic(ic *indexContext, err *error) {
+	if r := recover(); r != nil {
+		logx.Errorf("[DocIndex] DocumentId=%s panic recovered: %v", ic.msg.DocumentId, r)
+		l.updateRunStatus(l.ctx, ic.msg.DocumentId, knowledge_document.RunStateFailed, fmt.Sprintf("panic: %v", r))
+		*err = nil
+	}
+}
+
+func (l *DocumentIndexLogic) recordSuccessMetrics(ic *indexContext, totalChunks, contentChunks int) {
+	qaChunks := totalChunks - contentChunks
+	metric.IndexingDuration.WithLabelValues(ic.msg.KnowledgeBaseId, "success").Observe(time.Since(ic.startTime).Seconds())
+	metric.ChunksIndexed.WithLabelValues(ic.msg.KnowledgeBaseId).Observe(float64(totalChunks))
+
+	logx.Infof("[DocIndex] DocumentId=%s 索引成功. ContentChunks=%d, QAChunks=%d, Total=%d",
+		ic.msg.DocumentId, contentChunks, qaChunks, totalChunks)
 }

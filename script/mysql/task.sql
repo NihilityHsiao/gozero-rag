@@ -5,7 +5,7 @@ CREATE TABLE `task` (
     `from_page` int(11) NOT NULL DEFAULT '0' COMMENT '起始页/行 (包含)',
     `to_page` int(11) NOT NULL DEFAULT '0' COMMENT '结束页/行 (不包含)',
     `progress` float NOT NULL DEFAULT '0' COMMENT '任务进度 0.0-1.0',
-    `status` varchar(32) NOT NULL DEFAULT 'pending' COMMENT '状态: pending, running, success, fail, cancel',
+    `status` varchar(32) NOT NULL DEFAULT 'pending' COMMENT '状态: pending | running | success | fail | paused',
     `progress_msg` text COMMENT '当前进度的详细日志/最后一条消息',
     `fail_reason` text COMMENT '如果失败，记录具体堆栈或错误信息',
     `retry_count` tinyint(3) NOT NULL DEFAULT '0' COMMENT '重试次数',-- 缓存与去重
