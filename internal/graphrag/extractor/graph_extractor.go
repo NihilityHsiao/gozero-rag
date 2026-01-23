@@ -3,10 +3,11 @@ package extractor
 import (
 	"context"
 	"fmt"
-	"github.com/cloudwego/eino/callbacks"
-	"github.com/zeromicro/go-zero/core/logx"
 	"strconv"
 	"strings"
+
+	"github.com/cloudwego/eino/callbacks"
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"gozero-rag/internal/graphrag/prompt"
 	"gozero-rag/internal/graphrag/types"
@@ -142,6 +143,8 @@ func (e *GraphExtractor) Extract(ctx context.Context, chunks []*chunk.Chunk) (*t
 		result.Relations = append(result.Relations, relations...)
 	}
 
+	result = e.Merge([]*types.GraphExtractionResult{result})
+
 	return result, nil
 }
 
@@ -209,4 +212,74 @@ func logCallback() callbacks.Handler {
 	})
 
 	return builder.Build()
+}
+
+// Merge merges multiple GraphExtractionResults into one
+func (e *GraphExtractor) Merge(results []*types.GraphExtractionResult) *types.GraphExtractionResult {
+	mergedEntities := make(map[string]types.Entity)
+	mergedRelations := make(map[string]types.Relation)
+
+	for _, res := range results {
+		for _, entity := range res.Entities {
+			if existing, ok := mergedEntities[entity.Name]; ok {
+				// Merge logic
+				existing.SourceId = append(existing.SourceId, entity.SourceId...)
+				// Deduplicate SourceId
+				existing.SourceId = uniqueStrings(existing.SourceId)
+				// Merge Description (simple concatenation for now, or keep longest?)
+				// Let's keep the longest description as it might be more detailed,
+				// or concatenate if they are different.
+				if len(entity.Description) > len(existing.Description) {
+					existing.Description = entity.Description
+				}
+				mergedEntities[entity.Name] = existing
+			} else {
+				mergedEntities[entity.Name] = entity
+			}
+		}
+
+		for _, relation := range res.Relations {
+			// Key: SrcId + DstId
+			key := fmt.Sprintf("%s->%s", relation.SrcId, relation.DstId)
+			if existing, ok := mergedRelations[key]; ok {
+				existing.SourceId = append(existing.SourceId, relation.SourceId...)
+				existing.SourceId = uniqueStrings(existing.SourceId)
+				// Average weight
+				existing.Weight = (existing.Weight + relation.Weight) / 2
+				// Merge Description
+				if len(relation.Description) > len(existing.Description) {
+					existing.Description = relation.Description
+				}
+				mergedRelations[key] = existing
+			} else {
+				mergedRelations[key] = relation
+			}
+		}
+	}
+
+	finalResult := &types.GraphExtractionResult{
+		Entities:  make([]types.Entity, 0, len(mergedEntities)),
+		Relations: make([]types.Relation, 0, len(mergedRelations)),
+	}
+
+	for _, v := range mergedEntities {
+		finalResult.Entities = append(finalResult.Entities, v)
+	}
+	for _, v := range mergedRelations {
+		finalResult.Relations = append(finalResult.Relations, v)
+	}
+
+	return finalResult
+}
+
+func uniqueStrings(input []string) []string {
+	keys := make(map[string]bool)
+	list := []string{}
+	for _, entry := range input {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
 }
