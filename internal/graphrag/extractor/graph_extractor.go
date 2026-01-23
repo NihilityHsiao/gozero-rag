@@ -3,6 +3,8 @@ package extractor
 import (
 	"context"
 	"fmt"
+	"github.com/cloudwego/eino/callbacks"
+	"github.com/zeromicro/go-zero/core/logx"
 	"strconv"
 	"strings"
 
@@ -18,6 +20,16 @@ import (
 type GraphExtractor struct {
 	llm      model.ToolCallingChatModel
 	runnable compose.Runnable[GraphInput, GraphOutput]
+}
+
+func (l *GraphExtractor) Invoke(ctx context.Context, input GraphInput, opts ...compose.Option) (output GraphOutput, err error) {
+	withCallbacks := compose.WithCallbacks(logCallback())
+
+	opts = append(opts, withCallbacks)
+
+	// 注入 config
+	//ctx = context.WithValue(ctx, constant.CtxKeyIndexConfig, input.IndexConfig)
+	return l.runnable.Invoke(ctx, input, opts...)
 }
 
 type GraphInput = *GraphExtractionState
@@ -41,6 +53,7 @@ func NewGraphExtractor(ctx context.Context, llm model.ToolCallingChatModel) (*Gr
 	_ = g.AddLambdaNode("generate_prompt", compose.InvokableLambda(func(ctx context.Context, state *GraphExtractionState) (*GraphExtractionState, error) {
 		var msgs []*schema.Message
 		var err error
+
 		if state.LoopCount == 0 {
 			msgs, err = prompt.NewGraphPrompt(state.InputText)
 		} else {
@@ -184,4 +197,16 @@ func (e *GraphExtractor) parseHistory(history string, sourceId string) ([]types.
 		}
 	}
 	return entities, relations
+}
+
+func logCallback() callbacks.Handler {
+	builder := callbacks.NewHandlerBuilder()
+	builder.OnStartFn(func(ctx context.Context, info *callbacks.RunInfo, input callbacks.CallbackInput) context.Context {
+
+		logx.Infof("[graph extractor] - %s:%s:%s", info.Component, info.Type, info.Name)
+
+		return ctx
+	})
+
+	return builder.Build()
 }
