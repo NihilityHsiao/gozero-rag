@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"gozero-rag/internal/model/knowledge_retrieval_log"
 	"gozero-rag/internal/rag_core/retriever"
+	"gozero-rag/internal/tools/llmx"
 	"gozero-rag/internal/xerr"
 	"gozero-rag/restful/rag/internal/common"
 	"gozero-rag/restful/rag/internal/svc"
 	"gozero-rag/restful/rag/internal/types"
-	"strconv"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -33,36 +33,38 @@ func NewGetRetrievalLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetR
 }
 
 func (l *GetRetrievalLogic) getRetrieveRequestFromReq(req *types.RetrieveReq) (*retriever.RetrieveRequest, error) {
+	// 1. 获取知识库
 	kb, err := l.svcCtx.KnowledgeBaseModel.FindOne(l.ctx, req.KnowledgeBaseId)
 	if err != nil {
 		return nil, xerr.NewInternalErrMsg("知识库不存在")
 	}
 
-	// Phase 3: kb.EmbdId is a string reference.
-	// If UserApiModel uses integer IDs, we must convert.
-	// If TenantLlmModel should be used, we should switch here.
-	// For now, assuming EmbdId holds the integer ID of UserApiModel for compatibility logic
-	// or we need to fetch from TenantLlmModel.
-	// Assuming UserApiModel for now to keep minimal changes to logic flow, but converting string to int.
-	embId, err := strconv.ParseUint(kb.EmbdId, 10, 64)
+	// 2. 获取 Embedding 模型配置 (TenantLlmModel)
+	embModelName, embFactory := llmx.GetModelNameFactory(kb.EmbdId)
+	embLlm, err := l.svcCtx.TenantLlmModel.FindOneByTenantIdLlmFactoryLlmName(l.ctx, kb.TenantId, embFactory, embModelName)
 	if err != nil {
-		// Fallback or error if ID is not int (e.g. UUID)
-		// If using TenantLLM, logic changes.
-		return nil, xerr.NewInternalErrMsg("invalid embedding model id format")
+		logx.Errorf("Get embedding model failed: tenantId=%s, factory=%s, model=%s, err=%v", kb.TenantId, embFactory, embModelName, err)
+		return nil, xerr.NewInternalErrMsg(fmt.Sprintf("Embedding 模型配置不存在: %s", kb.EmbdId))
 	}
 
-	emb, err := l.svcCtx.UserApiModel.FindOne(l.ctx, embId)
-	if err != nil {
-		return nil, xerr.NewInternalErrMsg("embedding model not found")
+	// 3. 获取 Rerank 模型配置 (TenantLlmModel)
+	var rnkConfig retriever.ModelConfig
+	if req.RetrievalConfig.HybridStrategy.RerankModelID != "" {
+		rnkModelName, rnkFactory := llmx.GetModelNameFactory(req.RetrievalConfig.HybridStrategy.RerankModelID)
+		rnkLlm, err := l.svcCtx.TenantLlmModel.FindOneByTenantIdLlmFactoryLlmName(l.ctx, kb.TenantId, rnkFactory, rnkModelName)
+		if err != nil {
+			logx.Errorf("Get rerank model failed: tenantId=%s, factory=%s, model=%s, err=%v", kb.TenantId, rnkFactory, rnkModelName, err)
+			return nil, xerr.NewInternalErrMsg(fmt.Sprintf("Rerank 模型配置不存在: %s", req.RetrievalConfig.HybridStrategy.RerankModelID))
+		}
+		rnkConfig = retriever.ModelConfig{
+			ModelName: rnkLlm.LlmName,
+			BaseUrl:   rnkLlm.ApiBase.String,
+			ApiKey:    rnkLlm.ApiKey.String,
+		}
 	}
 
-	rnk, err := l.svcCtx.UserApiModel.FindOne(l.ctx, req.RetrievalConfig.HybridStrategy.RerankModelID)
-	if err != nil {
-		return nil, xerr.NewInternalErrMsg("rerank model not found")
-	}
-
+	// 4. 确定召回模式
 	mode := ""
-
 	hybridType := ""
 
 	switch req.RetrievalMode {
@@ -78,35 +80,36 @@ func (l *GetRetrievalLogic) getRetrieveRequestFromReq(req *types.RetrieveReq) (*
 		} else if req.RetrievalConfig.HybridStrategy.Type == retriever.HybridRankTypeRerank {
 			hybridType = retriever.HybridRankTypeRerank
 		} else {
-			logx.Errorf("invalid hybrid type: %v", req.RetrievalConfig.HybridStrategy.Type)
-			return nil, fmt.Errorf("不支持的混合召回类型")
+			// 默认 weighted
+			hybridType = retriever.HybridRankTypeWeighted
 		}
-
 	default:
-		logx.Errorf("invalid retrieve type: %v", req.RetrievalMode)
-		return nil, fmt.Errorf("不支持的召回模式")
+		// 默认混合
+		mode = retriever.RetrieveModeHybrid
+		hybridType = retriever.HybridRankTypeWeighted
 	}
 
-	// check hybrid
-
 	ret := &retriever.RetrieveRequest{
-		Query:                req.Query,
-		KnowledgeBaseId:      req.KnowledgeBaseId,
-		TopK:                 req.RetrievalConfig.TopK,
-		EmbeddingModelConfig: retriever.ModelConfig{ModelName: emb.ModelName, BaseUrl: emb.BaseUrl, ApiKey: emb.ApiKey},
-		RerankModelConfig:    retriever.ModelConfig{ModelName: rnk.ModelName, BaseUrl: rnk.BaseUrl, ApiKey: rnk.ApiKey},
-		Mode:                 mode,
-		ScoreThreshold:       req.RetrievalConfig.ScoreThreshold,
-		HybridRankType:       hybridType,
-		VectorWeight:         req.RetrievalConfig.HybridStrategy.Weights.Vector,
-		KeywordWeight:        req.RetrievalConfig.HybridStrategy.Weights.Keyword,
+		Query:           req.Query,
+		KnowledgeBaseId: req.KnowledgeBaseId,
+		TopK:            req.RetrievalConfig.TopK,
+		EmbeddingModelConfig: retriever.ModelConfig{
+			ModelName: embLlm.LlmName,
+			BaseUrl:   embLlm.ApiBase.String,
+			ApiKey:    embLlm.ApiKey.String,
+		},
+		RerankModelConfig: rnkConfig,
+		Mode:              mode,
+		ScoreThreshold:    req.RetrievalConfig.ScoreThreshold,
+		HybridRankType:    hybridType,
+		VectorWeight:      req.RetrievalConfig.HybridStrategy.Weights.Vector,
+		KeywordWeight:     req.RetrievalConfig.HybridStrategy.Weights.Keyword,
 	}
 
 	return ret, nil
-
 }
-func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.RetrieveResp, err error) {
 
+func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.RetrieveResp, err error) {
 	start := time.Now()
 
 	retrieveReq, err := l.getRetrieveRequestFromReq(req)
@@ -117,7 +120,7 @@ func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.Re
 	docs, err := l.svcCtx.RetrieveSvc.Query(l.ctx, retrieveReq)
 	if err != nil {
 		logx.Errorf("检索失败:%v", err)
-		return nil, xerr.NewInternalErrMsg("检索失败")
+		return nil, xerr.NewInternalErrMsg(fmt.Sprintf("检索失败: %v", err))
 	}
 
 	chunks := make([]types.RetrievalChunk, 0, len(docs))
@@ -126,7 +129,7 @@ func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.Re
 		chunks = append(chunks, types.RetrievalChunk{
 			ChunkID: meta.ChunkID,
 			DocID:   meta.DocID,
-			DocName: "", // 目前 metadata 中没有 doc_name，通常需要单独查询或在索引时冗余存储
+			DocName: "", // ES 中如果未存 doc_name，则为空
 			Content: doc.Content,
 			Score:   doc.Score(),
 			Source:  meta.Type,
@@ -136,10 +139,8 @@ func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.Re
 	cost := time.Since(start).Milliseconds()
 	userId, _ := common.GetUidFromCtx(l.ctx)
 
-	// 记录日志
+	// 记录日志 (异步)
 	go func() {
-		// 序列化 RetrievalParams
-		// Note: req.RetrievalConfig uses json tags, should be fine.
 		paramsBytes, _ := json.Marshal(req.RetrievalConfig)
 		logEntry := &knowledge_retrieval_log.KnowledgeRetrievalLog{
 			KnowledgeBaseId: req.KnowledgeBaseId,
@@ -151,23 +152,21 @@ func (l *GetRetrievalLogic) GetRetrieval(req *types.RetrieveReq) (resp *types.Re
 				Valid:  true,
 			},
 			ChunkCount: int64(len(chunks)),
-			TimeCostMs: int64(cost), // Cast to int64 as per model? Check model type. Model is int64 usually. Check gen-model output.
-			// script says int. Model might be int64.
+			TimeCostMs: cost,
 		}
 
 		_, logErr := l.svcCtx.KnowledgeRetrievalLogModel.Insert(context.Background(), logEntry)
 		if logErr != nil {
-			logx.Errorf("记录召回日志失败, err:%v, log:%v", logErr, logEntry)
+			logx.Errorf("记录召回日志失败, err:%v", logErr)
 		}
-
 	}()
 
 	resp = &types.RetrieveResp{
 		KnowledgeBaseID: req.KnowledgeBaseId,
-		DocIDs:          []string{}, // Empty for now
+		DocIDs:          req.DocIDs,
 		TimeCostMs:      cost,
 		Chunks:          chunks,
 	}
 
-	return
+	return resp, nil
 }

@@ -29,8 +29,8 @@ import {
     SheetTitle,
 } from "@/components/ui/sheet"
 
-import { getUserApiList } from '@/api/user_model';
-import type { UserApiInfo } from '@/types';
+import { listTenantLlm } from '@/api/llm';
+import type { TenantLlmInfo } from '@/types';
 
 
 // Schema Definition - Query removed
@@ -61,9 +61,9 @@ export const RetrievalSettingsSheet: React.FC<RetrievalSettingsSheetProps> = ({
     onOpenChange,
     currentConfig,
     onSave,
-    userId
 }) => {
-    const [rerankModels, setRerankModels] = useState<UserApiInfo[]>([]);
+    // 改用 TenantLlmInfo
+    const [rerankModels, setRerankModels] = useState<TenantLlmInfo[]>([]);
 
     const form = useForm<RetrievalSettingsValues>({
         resolver: zodResolver(retrievalSettingsSchema),
@@ -80,17 +80,16 @@ export const RetrievalSettingsSheet: React.FC<RetrievalSettingsSheetProps> = ({
 
     useEffect(() => {
         const fetchModels = async () => {
-            if (userId) {
-                try {
-                    const res = await getUserApiList(userId, { model_type: 'rerank' });
-                    setRerankModels(res.list || []);
-                } catch (error) {
-                    console.error('Failed to fetch rerank models', error);
-                }
+            try {
+                // 查询租户的 rerank 模型
+                const res = await listTenantLlm({ model_type: 'rerank', page: 1, page_size: 100 });
+                setRerankModels(res.list || []);
+            } catch (error) {
+                console.error('Failed to fetch rerank models', error);
             }
         };
         fetchModels();
-    }, [userId]);
+    }, []);
 
     const handleSave = (values: RetrievalSettingsValues) => {
         onSave(values);
@@ -318,8 +317,9 @@ export const RetrievalSettingsSheet: React.FC<RetrievalSettingsSheetProps> = ({
                                                         </FormControl>
                                                         <SelectContent>
                                                             {rerankModels.map(model => (
-                                                                <SelectItem key={model.id} value={String(model.id)}>
-                                                                    {model.model_name} ({model.config_name})
+                                                                // 使用 model@factory 格式
+                                                                <SelectItem key={model.id} value={`${model.llm_name}@${model.llm_factory}`}>
+                                                                    {model.llm_name} ({model.llm_factory})
                                                                 </SelectItem>
                                                             ))}
                                                             {rerankModels.length === 0 && (

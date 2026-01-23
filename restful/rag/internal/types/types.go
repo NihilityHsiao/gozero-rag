@@ -245,7 +245,7 @@ type HistoryMessage struct {
 type HybridStrategy struct {
 	Type          string        `json:"type,optional"`            // 混合策略类型: weighted (加权), rerank (重排序)
 	Weights       HybridWeights `json:"weights,optional"`         // 加权模式下的权重配置
-	RerankModelID uint64        `json:"rerank_model_id,optional"` // 重排序模式下的模型ID
+	RerankModelID string        `json:"rerank_model_id,optional"` // 重排序模式下的模型ID
 }
 
 type HybridWeights struct {

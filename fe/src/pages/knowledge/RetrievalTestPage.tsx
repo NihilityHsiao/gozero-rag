@@ -5,9 +5,9 @@ import { RetrievalSettingsSheet, type RetrievalSettingsValues } from '@/componen
 import { RetrievalResultList } from '@/components/retrieval/RetrievalResultList';
 import { RetrievalHistory } from '@/components/retrieval/RetrievalHistory';
 import { retrievalApi } from '@/api/retrieval';
-import { getUserApiList } from '@/api/user_model';
+import { listTenantLlm } from '@/api/llm';
 import type { RetrievalChunk, RetrieveLog, RetrieveReq } from '@/types/retrieval';
-import type { UserApiInfo } from '@/types';
+import type { TenantLlmInfo } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -41,7 +41,7 @@ const RetrievalTestPage: React.FC = () => {
         weight_keyword: 0.3,
     });
 
-    const [rerankModels, setRerankModels] = useState<UserApiInfo[]>([]);
+    const [rerankModels, setRerankModels] = useState<TenantLlmInfo[]>([]);
 
     // Fetch logs and models on mount
     useEffect(() => {
@@ -76,16 +76,15 @@ const RetrievalTestPage: React.FC = () => {
     };
 
     const fetchRerankModels = async () => {
-        // userId fixed to 1 as per current context
         try {
-            if (!userInfo?.user_id) return;
-            const res = await getUserApiList(userInfo.user_id, { model_type: 'rerank' });
+            const res = await listTenantLlm({ model_type: 'rerank', page: 1, page_size: 100 });
             if (res.list && res.list.length > 0) {
                 setRerankModels(res.list);
                 // Set default rerank model if not set
                 setConfig(prev => {
                     if (!prev.rerank_model_id) {
-                        return { ...prev, rerank_model_id: String(res.list[0].id) };
+                        const first = res.list[0];
+                        return { ...prev, rerank_model_id: `${first.llm_name}@${first.llm_factory}` };
                     }
                     return prev;
                 });
@@ -103,8 +102,8 @@ const RetrievalTestPage: React.FC = () => {
 
         // Ensure rerank model is selected (if available)
         if (!config.rerank_model_id && rerankModels.length > 0) {
-            // Should be handled by useEffect but just in case
-            config.rerank_model_id = String(rerankModels[0].id);
+            const first = rerankModels[0];
+            config.rerank_model_id = `${first.llm_name}@${first.llm_factory}`;
         }
 
         setLoading(true);
