@@ -1,8 +1,8 @@
 package types
 
 type GraphExtractionResult struct {
-	Entities []Entity
-	Relation []Relation
+	Entities  []Entity
+	Relations []Relation
 }
 
 type Entity struct {

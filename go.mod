@@ -10,7 +10,7 @@ require (
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20251229121631-716047332ba5
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20251229121631-716047332ba5
 	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260108032612-f658a8b54235
-	github.com/cloudwego/eino-ext/components/model/openai v0.1.6
+	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
 	github.com/elastic/go-elasticsearch/v8 v8.19.1
 	github.com/go-sql-driver/mysql v1.9.0
 	github.com/gofrs/uuid/v5 v5.4.0
@@ -41,7 +41,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cilium/ebpf v0.11.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.10 // indirect
+	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.13 // indirect
 	github.com/cockroachdb/errors v1.9.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
