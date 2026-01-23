@@ -247,8 +247,12 @@ func (e *GraphExtractor) Merge(results []*types.GraphExtractionResult) *types.Gr
 				// Average weight
 				existing.Weight = (existing.Weight + relation.Weight) / 2
 				// Merge Description
-				if len(relation.Description) > len(existing.Description) {
-					existing.Description = relation.Description
+				if relation.Description != "" && !strings.Contains(existing.Description, relation.Description) {
+					if existing.Description != "" {
+						existing.Description += "\n" + relation.Description
+					} else {
+						existing.Description = relation.Description
+					}
 				}
 				mergedRelations[key] = existing
 			} else {
