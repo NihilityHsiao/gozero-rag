@@ -167,6 +167,8 @@ func (l *DocumentIndexLogic) processDocument(ctx context.Context, msg *indexMess
 		return err
 	}
 
+	// Step 10: 如果开启了rag生成，发送task到消息队列
+
 	// 记录成功指标
 	l.recordSuccessMetrics(ic, len(saveChunks), len(chunks))
 	return nil

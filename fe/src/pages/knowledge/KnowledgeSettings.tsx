@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2, Settings, FileCog, X, Info } from 'lucide-react';
+import { Loader2, Settings, FileCog, X, Info, Network } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +33,9 @@ import { useKnowledgeStore } from '@/store/useKnowledgeStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { KnowledgeBaseInfo, UserApiInfo, LlmFactoryInfo, TenantLlmInfo } from '@/types';
 
+// Import GraphSettings
+import { GraphSettings } from './GraphSettings';
+
 // Schema Definition
 const settingsSchema = z.object({
     // General
@@ -58,12 +61,30 @@ const settingsSchema = z.object({
     qa_num: z.number().min(0).max(50).optional(),
     qa_llm_id: z.string().optional(),
     pdf_parser: z.enum(['pdfcpu', 'eino', 'deepdoc']),
+
+    // Graph RAG Config
+    graph_rag: z.object({
+        enable_graph: z.boolean(),
+        graph_llm_id: z.string().optional(),
+        entity_types: z.array(z.string()).optional(),
+        enable_entity_resolution: z.boolean().optional(),
+        enable_community: z.boolean().optional(),
+    }).optional(),
+
 }).superRefine((val, ctx) => {
     if ((val.qa_num || 0) > 0 && !val.qa_llm_id) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: "开启 QA 生成时必须选择模型",
             path: ["qa_llm_id"],
+        });
+    }
+
+    if (val.graph_rag?.enable_graph && !val.graph_rag.graph_llm_id) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "启用知识图谱必须选择 LLM 模型",
+            path: ["graph_rag", "graph_llm_id"],
         });
     }
 });
@@ -74,7 +95,7 @@ export default function KnowledgeSettings() {
     const { id } = useParams<{ id: string }>();
     const knowledgeId = id!;
     const { fetchList } = useKnowledgeStore();
-    const [activeTab, setActiveTab] = useState<'general' | 'config'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'config' | 'graph'>('general');
 
     const [info, setInfo] = useState<KnowledgeBaseInfo | null>(null);
     const [loading, setLoading] = useState(true);
@@ -108,6 +129,13 @@ export default function KnowledgeSettings() {
             qa_num: 0,
             qa_llm_id: '',
             pdf_parser: 'eino',
+            graph_rag: {
+                enable_graph: false,
+                entity_types: ['organization', 'person', 'geo', 'event', 'category'],
+                enable_entity_resolution: false,
+                enable_community: false,
+                graph_llm_id: '',
+            }
         },
     });
 
@@ -145,6 +173,15 @@ export default function KnowledgeSettings() {
                     }
                 }
 
+                // Handle Graph Config
+                const graphConfig = parserConfig.graph_rag || {
+                    enable_graph: false,
+                    entity_types: ['organization', 'person', 'geo', 'event', 'category'],
+                    enable_entity_resolution: false,
+                    enable_community: false,
+                    graph_llm_id: '',
+                };
+
                 form.reset({
                     name: res.name,
                     description: res.description,
@@ -163,6 +200,7 @@ export default function KnowledgeSettings() {
                     qa_num: parserConfig.qa_num ?? 0,
                     qa_llm_id: parserConfig.qa_llm_id || '',
                     pdf_parser: parserConfig.pdf_parser || 'eino',
+                    graph_rag: graphConfig,
                 });
             } catch (error) {
                 console.error(error);
@@ -201,6 +239,7 @@ export default function KnowledgeSettings() {
                 parserConfig.qa_num = data.qa_num;
                 parserConfig.qa_llm_id = data.qa_llm_id;
                 parserConfig.pdf_parser = data.pdf_parser;
+                parserConfig.graph_rag = data.graph_rag; // Save Graph Config
             } else {
                 parserConfig.pdf_parser = data.pdf_parser;
             }
@@ -275,6 +314,9 @@ export default function KnowledgeSettings() {
                 </Button>
                 <Button variant={activeTab === 'config' ? 'secondary' : 'ghost'} className="w-full justify-start font-normal" onClick={() => setActiveTab('config')}>
                     <FileCog className="mr-2 h-4 w-4" /> 配置
+                </Button>
+                <Button variant={activeTab === 'graph' ? 'secondary' : 'ghost'} className="w-full justify-start font-normal" onClick={() => setActiveTab('graph')}>
+                    <Network className="mr-2 h-4 w-4" /> 知识图谱
                 </Button>
             </aside>
 
@@ -554,6 +596,10 @@ export default function KnowledgeSettings() {
                                     </CardContent>
                                 </Card>
                             </div>
+                        )}
+
+                        {activeTab === 'graph' && (
+                            <GraphSettings />
                         )}
 
                         <div className="flex justify-end pt-4">
