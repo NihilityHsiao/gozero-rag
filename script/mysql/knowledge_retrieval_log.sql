@@ -5,7 +5,7 @@ CREATE TABLE `knowledge_retrieval_log`
 (
     `id`               bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `knowledge_base_id` varchar(36) NOT NULL COMMENT '知识库ID (UUID)',
-    `user_id`          varchar(32) NOT NULL COMMENT '用户ID (UUID)',
+    `user_id`          varchar(36) NOT NULL COMMENT '用户ID (UUID)',
     `query`            text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户查询',
     `retrieval_mode`   varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '召回模式: vector, fulltext, hybrid',
     `retrieval_params` json DEFAULT NULL COMMENT '召回参数快照',
