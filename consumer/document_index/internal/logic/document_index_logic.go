@@ -169,7 +169,15 @@ func (l *DocumentIndexLogic) processDocument(ctx context.Context, msg *indexMess
 
 	// Step 10: 如果开启了rag生成，发送task到消息队列
 	if ic.config.GraphRag.EnableGraph {
-		// todo
+		_ = l.svcCtx.MqPusherClient.PublishGraphGenerateMsg(l.ctx, &mq.GraphGenerateMsg{
+			DocumentId:             ic.msg.DocumentId,
+			KnowledgeBaseId:        ic.msg.KnowledgeBaseId,
+			TenantId:               ic.msg.TenantId,
+			LlmId:                  ic.config.GraphRag.GraphLlmId,
+			EntityTypes:            ic.config.GraphRag.EntityTypes,
+			EnableEntityResolution: ic.config.GraphRag.EnableEntityResolution,
+			EnableCommunity:        ic.config.GraphRag.EnableCommunity,
+		})
 	}
 
 	// 记录成功指标
