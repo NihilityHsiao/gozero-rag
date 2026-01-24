@@ -336,15 +336,15 @@ export default function KnowledgeGraph() {
             const extraLinks: any[] = [];
 
             // Helper
-            const addGroup = (count: number, prefix: string, type: string, targetId: string, desc: string) => {
+            const addGroup = (count: number, prefix: string, type: string, targetId: string, desc: string, relDesc: string = "隶属") => {
                 for (let i = 1; i <= count; i++) {
-                    const id = `${prefix} ${i}`;
-                    extraNodes.push({ id, name: id, type, description: desc, val: 3, source_id: [] });
-                    extraLinks.push({ source: id, target: targetId, description: "隶属", weight: 2 });
+                    const id = `${prefix} #${i}`;
+                    extraNodes.push({ id: id, name: id, type, description: desc, val: Math.floor(Math.random() * 5) + 1, source_id: [] });
+                    extraLinks.push({ source: id, target: targetId, description: relDesc, weight: 1 });
                 }
             };
 
-            // Core Characters
+            // --- Fan Ren Xiu Xian Zhuan (Mortal's Journey) - Core Only ---
             extraNodes.push(
                 { id: "韩立", name: "韩立", type: "person", description: "凡人修仙传主角，心思缜密。", val: 25, source_id: ["fr-001"] },
                 { id: "南宫婉", name: "南宫婉", type: "person", description: "韩立的道侣。", val: 18, source_id: ["fr-002"] },
@@ -365,7 +365,7 @@ export default function KnowledgeGraph() {
                 { source: "南宫婉", target: "黄枫谷", description: "邻宗", weight: 5 }
             );
 
-            // Limited procedural additions
+            // Limited procedural additions for Fan Ren
             addGroup(40, "黄枫谷弟子", "person", "黄枫谷", "越国修仙者，资质各异。");
             addGroup(50, "乱星海妖兽", "person", "乱星海", "深海中的强大妖兽，浑身是宝。");
             addGroup(30, "噬金虫", "person", "韩立", "无物不噬的可怕奇虫，韩立的杀手锏。");
@@ -374,6 +374,103 @@ export default function KnowledgeGraph() {
             addGroup(30, "花果山猴兵", "person", "花果山", "花果山的普通猴子猴孙。");
             addGroup(40, "天兵天将", "organization", "天庭", "镇守天庭的士兵。");
             addGroup(15, "盘丝洞蜘蛛精", "person", "唐三藏", "企图吃唐僧肉的女妖精。");
+
+
+            // 1. 火影忍者 (Naruto)
+            extraNodes.push(
+                { id: "漩涡鸣人", name: "漩涡鸣人", type: "person", description: "火影忍者主角，七代火影。", val: 28, source_id: ["naruto-01"] },
+                { id: "宇智波佐助", name: "宇智波佐助", type: "person", description: "鸣人的羁绊，支撑的一影。", val: 26, source_id: ["naruto-01"] },
+                { id: "木叶村", name: "木叶村", type: "geo", description: "火之国隐村。", val: 25, source_id: ["naruto-geo"] },
+                { id: "晓组织", name: "晓组织", type: "organization", description: "S级叛忍组织。", val: 24, source_id: ["naruto-org"] }
+            );
+            extraLinks.push(
+                { source: "漩涡鸣人", target: "木叶村", description: "守护", weight: 10 },
+                { source: "宇智波佐助", target: "木叶村", description: "守护", weight: 9 },
+                { source: "漩涡鸣人", target: "宇智波佐助", description: "羁绊", weight: 10 }
+            );
+            addGroup(100, "木叶忍者", "person", "木叶村", "火之意志的继承者。", "守护");
+            addGroup(50, "影分身", "person", "漩涡鸣人", "鸣人的实体分身。", "分身");
+
+            // 2. 灵笼 (Ling Cage)
+            extraNodes.push(
+                { id: "马克", name: "马克", type: "person", description: "猎荒者指挥官。", val: 20, source_id: ["ling-01"] },
+                { id: "冉冰", name: "冉冰", type: "person", description: "马克的副官与爱人。", val: 18, source_id: ["ling-01"] },
+                { id: "灯塔", name: "灯塔", type: "geo", description: "人类最后的栖息地。", val: 25, source_id: ["ling-geo"] }
+            );
+            extraLinks.push(
+                { source: "马克", target: "灯塔", description: "守护", weight: 9 },
+                { source: "马克", target: "冉冰", description: "深爱", weight: 10 }
+            );
+            addGroup(60, "猎荒者", "person", "马克", "地面采集物资的精锐部队。", "队员");
+            addGroup(40, "噬极兽", "person", "灯塔", "地面的恐怖生物。", "威胁");
+
+            // 3. 剑来 (Sword of Coming)
+            extraNodes.push(
+                { id: "陈平安", name: "陈平安", type: "person", description: "隐官大人，剑气长城。", val: 25, source_id: ["jl-01"] },
+                { id: "宁姚", name: "宁姚", type: "person", description: "剑气长城第一人，陈平安媳妇。", val: 24, source_id: ["jl-01"] },
+                { id: "剑气长城", name: "剑气长城", type: "geo", description: "抵御妖族的第一线。", val: 28, source_id: ["jl-geo"] }
+            );
+            extraLinks.push(
+                { source: "陈平安", target: "宁姚", description: "道侣", weight: 10 },
+                { source: "陈平安", target: "剑气长城", description: "驻守", weight: 10 }
+            );
+            addGroup(100, "剑修", "person", "剑气长城", "万千剑修，决战城头。", "驻守");
+            addGroup(50, "妖族大军", "person", "剑气长城", "蛮荒天下的入侵者。", "攻打");
+
+            // 4. 红楼梦 (Red Dream)
+            extraNodes.push(
+                { id: "贾宝玉", name: "贾宝玉", type: "person", description: "荣国府衔玉而诞的公子。", val: 20, source_id: ["red-01"] },
+                { id: "林黛玉", name: "林黛玉", type: "person", description: "金陵十二钗之首，世外仙姝寂寞林。", val: 20, source_id: ["red-01"] },
+                { id: "大观园", name: "大观园", type: "geo", description: "贾府为元妃省亲修建的别墅。", val: 22, source_id: ["red-geo"] }
+            );
+            extraLinks.push(
+                { source: "贾宝玉", target: "林黛玉", description: "木石前盟", weight: 10 },
+                { source: "贾宝玉", target: "大观园", description: "居住", weight: 8 }
+            );
+            addGroup(50, "丫鬟", "person", "大观园", "大观园中的侍女。", "侍奉");
+            addGroup(40, "贾氏宗亲", "person", "贾宝玉", "荣宁二府的亲戚。", "亲族");
+
+            // 5. 盗墓笔记 (Tomb Notes)
+            extraNodes.push(
+                { id: "吴邪", name: "吴邪", type: "person", description: "天真无邪，老九门吴家传人。", val: 22, source_id: ["tomb-01"] },
+                { id: "张起灵", name: "张起灵", type: "person", description: "闷油瓶，神秘强大的小哥。", val: 25, source_id: ["tomb-01"] },
+                { id: "王胖子", name: "王胖子", type: "person", description: "摸金校尉，铁三角之一。", val: 20, source_id: ["tomb-01"] },
+                { id: "七星鲁王宫", name: "七星鲁王宫", type: "geo", description: "战国时期的古墓。", val: 20, source_id: ["tomb-geo"] }
+            );
+            extraLinks.push(
+                { source: "吴邪", target: "张起灵", description: "铁三角", weight: 10 },
+                { source: "吴邪", target: "王胖子", description: "铁三角", weight: 10 },
+                { source: "吴邪", target: "七星鲁王宫", description: "探险", weight: 9 }
+            );
+            addGroup(50, "尸蹩", "person", "七星鲁王宫", "墓中的危险生物。", "栖息");
+            addGroup(30, "粽子", "person", "七星鲁王宫", "起尸的古尸。", "守护");
+
+            // 6. 大王饶命 (Spare Me)
+            extraNodes.push(
+                { id: "吕树", name: "吕树", type: "person", description: "可以将负面情绪值转化为修行资源的毒舌少年。", val: 24, source_id: ["spare-01"] },
+                { id: "吕小鱼", name: "吕小鱼", type: "person", description: "吕树的妹妹，御兽能力者。", val: 22, source_id: ["spare-01"] },
+                { id: "天罗地网", name: "天罗地网", type: "organization", description: "华夏修行者组织。", val: 25, source_id: ["spare-org"] }
+            );
+            extraLinks.push(
+                { source: "吕树", target: "吕小鱼", description: "兄妹/相依为命", weight: 10 },
+                { source: "吕树", target: "天罗地网", description: "第九天罗", weight: 9 }
+            );
+            addGroup(100, "道元班学生", "person", "天罗地网", "觉醒资质的学生。", "学员");
+
+            // 7. 诡秘之主 (LOTM)
+            extraNodes.push(
+                { id: "克莱恩", name: "克莱恩", type: "person", description: "愚者先生，来自源堡的穿越者。", val: 26, source_id: ["lotm-01"] },
+                { id: "奥黛丽", name: "奥黛丽", type: "person", description: "正义小姐，贝克兰德最耀眼的宝石。", val: 20, source_id: ["lotm-01"] },
+                { id: "塔罗会", name: "塔罗会", type: "organization", description: "隐秘组织，以此交换情报和资源。", val: 24, source_id: ["lotm-org"] },
+                { id: "廷根市", name: "廷根市", type: "geo", description: "克莱恩穿越初始之地。", val: 18, source_id: ["lotm-geo"] }
+            );
+            extraLinks.push(
+                { source: "克莱恩", target: "塔罗会", description: "召集人", weight: 10 },
+                { source: "奥黛丽", target: "塔罗会", description: "成员", weight: 9 },
+                { source: "克莱恩", target: "廷根市", description: "居住", weight: 8 }
+            );
+            addGroup(60, "值夜者", "person", "廷根市", "黑夜女神的守护力量。", "守护");
+            addGroup(50, "非凡者", "person", "塔罗会", "掌握非凡力量的人。", "交易");
 
             data.nodes = [...data.nodes, ...extraNodes];
             data.links = [...data.links, ...extraLinks];
