@@ -535,7 +535,7 @@ export default function KnowledgeGraph() {
 
         // 2. The Text Label (SpriteText)
         const sprite = new SpriteText(node.name);
-        sprite.color = 'white';
+        sprite.color = 'rgba(255, 255, 255, 0.9)'; // Bright white for contrast against deep space
         sprite.textHeight = 4;
         sprite.position.set(0, radius + 4, 0);
         group.add(sprite);
@@ -569,18 +569,18 @@ export default function KnowledgeGraph() {
             if (hasFocus && !isRelevant) {
                 // Dim
                 sphere.material.opacity = 0.1;
-                sphere.material.color.set('#555');
+                sphere.material.color.set('#cbd5e1'); // Light gray dim
                 sprite.visible = false;
             } else {
                 // Active
                 const originalColor = TYPE_COLORS[node.type] || TYPE_COLORS.default;
-                sphere.material.opacity = 1;
+                sphere.material.opacity = 0.9;
                 sphere.material.color.set(originalColor);
                 sprite.visible = true;
 
                 if (isRelevant) {
                     sphere.material.emissive.set(originalColor);
-                    sphere.material.emissiveIntensity = 0.5;
+                    sphere.material.emissiveIntensity = 0.6; // Increased glow
                 } else {
                     sphere.material.emissiveIntensity = 0;
                 }
@@ -588,6 +588,48 @@ export default function KnowledgeGraph() {
         });
 
     }, [hoverNode, selectedNode, highlightNodes, data.nodes]);
+
+    // Starfield Effect
+    useEffect(() => {
+        if (!fgRef.current) return;
+
+        const scene = fgRef.current.scene();
+
+        // Create Stars
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsCount = 1500;
+        const posArray = new Float32Array(starsCount * 3);
+
+        for (let i = 0; i < starsCount * 3; i++) {
+            // Spread stars far away
+            posArray[i] = (Math.random() - 0.5) * 2000;
+        }
+
+        starsGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+        // Star Material
+        const starsMaterial = new THREE.PointsMaterial({
+            size: 2,
+            color: 0x4f90ff, // Light Blue tint
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending,
+            sizeAttenuation: true
+        });
+
+        const starField = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(starField);
+
+        // Optional: slow rotation could be added via an animation loop if accessible, 
+        // but static background stars work well for parallax with camera movement.
+
+        return () => {
+            scene.remove(starField);
+            starsGeometry.dispose();
+            starsMaterial.dispose();
+        };
+
+    }, []);
 
 
     const handleSearch = () => {
@@ -648,9 +690,16 @@ export default function KnowledgeGraph() {
 
     return (
         <div className="flex h-[calc(100vh-140px)] gap-4">
-            <Card className="flex-1 relative overflow-hidden bg-[#000011] border border-gray-800 shadow-sm rounded-xl">
+            <Card className="flex-1 relative overflow-hidden border border-gray-800 shadow-xl rounded-xl"
+                style={{
+                    background: 'radial-gradient(circle at center, #0B1121 0%, #000000 100%)' // Deep Blue to Pure Black
+                }}
+            >
+                {/* Optional: Vignette overlay for extra depth */}
+                <div className="absolute inset-0 bg-[radial-gradient(transparent_0%,#000000_100%)] opacity-60 pointer-events-none" />
+
                 <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 w-auto min-w-[300px] pointer-events-none">
-                    <div className="pointer-events-auto backdrop-blur-sm bg-white/10 border border-white/20 shadow-lg rounded-xl p-1 flex gap-1 items-center">
+                    <div className="pointer-events-auto backdrop-blur-md bg-black/40 border border-white/10 shadow-lg rounded-xl p-1 flex gap-1 items-center">
                         <Input
                             placeholder="搜索节点..."
                             className="border-0 bg-transparent focus-visible:ring-0 text-white placeholder:text-gray-400 h-9 w-64"
@@ -658,17 +707,17 @@ export default function KnowledgeGraph() {
                             onChange={e => setSearchQuery(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleSearch()}
                         />
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleSearch}>
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleSearch}>
                             <Search size={18} />
                         </Button>
-                        <Separator orientation="vertical" className="h-6 bg-white/20 mx-1" />
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomIn} title="放大">
+                        <Separator orientation="vertical" className="h-6 bg-white/10 mx-1" />
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomIn} title="放大">
                             <ZoomIn size={18} />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomOut} title="缩小">
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomOut} title="缩小">
                             <ZoomOut size={18} />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomToFit} title="全览">
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomToFit} title="全览">
                             <Maximize size={18} />
                         </Button>
                     </div>
@@ -684,7 +733,8 @@ export default function KnowledgeGraph() {
                     linkColor={link => {
                         // @ts-ignore
                         const idStr = `${link.source.id}-${link.target.id}`;
-                        return highlightLinks.has(idStr) ? '#55afff' : '#ffffff';
+                        // Highlight: Cyan Blue, Normal: Faint Blue
+                        return highlightLinks.has(idStr) ? '#00e5ff' : 'rgba(100, 149, 237, 0.2)';
                     }}
                     linkWidth={link => {
                         // @ts-ignore
@@ -692,7 +742,7 @@ export default function KnowledgeGraph() {
                         return highlightLinks.has(idStr) ? 2 : 0.5;
                     }}
                     linkOpacity={0.5}
-                    backgroundColor="#000011"
+                    backgroundColor="rgba(0,0,0,0)" // Transparent to let radial gradient show
                     controlType="orbit"
                 />
             </Card>
