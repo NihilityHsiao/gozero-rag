@@ -489,7 +489,7 @@ export default function KnowledgeGraph() {
             fgRef.current.cameraPosition(
                 { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
                 node, // lookAt ({ x, y, z })
-                3000  // ms transition duration
+                1000  // ms transition duration
             );
         }
     }, []);
@@ -629,11 +629,11 @@ export default function KnowledgeGraph() {
     return (
         <div className="flex h-[calc(100vh-140px)] gap-4">
             <Card className="flex-1 relative overflow-hidden bg-[#000011] border border-gray-800 shadow-sm rounded-xl">
-                <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 w-72 pointer-events-none">
-                    <div className="pointer-events-auto backdrop-blur-sm bg-white/10 border border-white/20 shadow-lg rounded-xl p-1 flex gap-2">
+                <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 w-auto min-w-[300px] pointer-events-none">
+                    <div className="pointer-events-auto backdrop-blur-sm bg-white/10 border border-white/20 shadow-lg rounded-xl p-1 flex gap-1 items-center">
                         <Input
                             placeholder="搜索节点..."
-                            className="border-0 bg-transparent focus-visible:ring-0 text-white placeholder:text-gray-400 h-9"
+                            className="border-0 bg-transparent focus-visible:ring-0 text-white placeholder:text-gray-400 h-9 w-64"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleSearch()}
@@ -641,18 +641,13 @@ export default function KnowledgeGraph() {
                         <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleSearch}>
                             <Search size={18} />
                         </Button>
-                    </div>
-                </div>
-
-                <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
-                    <div className="pointer-events-auto backdrop-blur-sm bg-white/10 border border-white/20 shadow-lg rounded-xl p-1 flex flex-col gap-1">
+                        <Separator orientation="vertical" className="h-6 bg-white/20 mx-1" />
                         <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomIn} title="放大">
                             <ZoomIn size={18} />
                         </Button>
                         <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomOut} title="缩小">
                             <ZoomOut size={18} />
                         </Button>
-                        <Separator className="bg-white/20" />
                         <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomToFit} title="全览">
                             <Maximize size={18} />
                         </Button>
