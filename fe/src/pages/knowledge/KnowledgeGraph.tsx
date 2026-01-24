@@ -601,9 +601,19 @@ export default function KnowledgeGraph() {
     const handleZoomIn = () => {
         if (fgRef.current) {
             const currentPos = fgRef.current.cameraPosition();
+            const target = fgRef.current.controls().target;
+
+            // Vector from Target to Camera
+            const v = {
+                x: currentPos.x - target.x,
+                y: currentPos.y - target.y,
+                z: currentPos.z - target.z
+            };
+
+            // Zoom In: multiple by < 1
             fgRef.current.cameraPosition(
-                { x: currentPos.x * 0.7, y: currentPos.y * 0.7, z: currentPos.z * 0.7 },
-                currentPos.lookAt,
+                { x: target.x + v.x * 0.6, y: target.y + v.y * 0.6, z: target.z + v.z * 0.6 },
+                target, // lookAt
                 400
             );
         }
@@ -612,9 +622,19 @@ export default function KnowledgeGraph() {
     const handleZoomOut = () => {
         if (fgRef.current) {
             const currentPos = fgRef.current.cameraPosition();
+            const target = fgRef.current.controls().target;
+
+            // Vector from Target to Camera
+            const v = {
+                x: currentPos.x - target.x,
+                y: currentPos.y - target.y,
+                z: currentPos.z - target.z
+            };
+
+            // Zoom Out: multiply by > 1
             fgRef.current.cameraPosition(
-                { x: currentPos.x * 1.3, y: currentPos.y * 1.3, z: currentPos.z * 1.3 },
-                currentPos.lookAt,
+                { x: target.x + v.x * 1.4, y: target.y + v.y * 1.4, z: target.z + v.z * 1.4 },
+                target, // lookAt
                 400
             );
         }
