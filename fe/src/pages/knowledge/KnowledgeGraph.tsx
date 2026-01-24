@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d';
-import * as d3 from 'd3-force';
+import ForceGraph3D from 'react-force-graph-3d';
+import * as THREE from 'three';
+import SpriteText from 'three-spritetext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Search, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
     Sheet,
@@ -104,7 +105,7 @@ const MOCK_DATA = {
         {
             id: "天庭",
             name: "天庭",
-            type: "geo", // Geo or Organization, kept as Geo for location context
+            type: "geo",
             description: "掌管三界的最高行政区域，位于天界三十三层天之上。",
             val: 18,
             source_id: ["doc-003"]
@@ -239,7 +240,6 @@ const MOCK_DATA = {
         }
     ],
     links: [
-        // 核心人物关系
         { source: "孙悟空", target: "唐三藏", description: "师徒/保镖", weight: 10 },
         { source: "猪八戒", target: "唐三藏", description: "师徒", weight: 8 },
         { source: "沙悟净", target: "唐三藏", description: "师徒", weight: 8 },
@@ -249,34 +249,29 @@ const MOCK_DATA = {
         { source: "唐三藏", target: "取经团队", description: "领导者", weight: 10 },
         { source: "孙悟空", target: "取经团队", description: "核心骨干", weight: 10 },
 
-        // 亲缘/社交关系
         { source: "牛魔王", target: "孙悟空", description: "昔日结拜兄弟", weight: 6 },
         { source: "牛魔王", target: "铁扇公主", description: "夫妻", weight: 9 },
         { source: "观音菩萨", target: "孙悟空", description: "点化/教导", weight: 8 },
         { source: "观音菩萨", target: "唐三藏", description: "指引", weight: 8 },
         { source: "如来佛祖", target: "孙悟空", description: "压制/收服", weight: 9 },
 
-        // 地点关联
         { source: "孙悟空", target: "花果山", description: "家乡/根据地", weight: 10 },
         { source: "孙悟空", target: "天庭", description: "任职/反叛", weight: 8 },
         { source: "孙悟空", target: "东海龙宫", description: "强夺兵器", weight: 7 },
         { source: "唐三藏", target: "西天大雷音寺", description: "目的地", weight: 10 },
 
-        // 物品关联
         { source: "孙悟空", target: "如意金箍棒", description: "持有", weight: 10 },
         { source: "猪八戒", target: "九齿钉耙", description: "持有", weight: 9 },
         { source: "铁扇公主", target: "芭蕉扇", description: "持有", weight: 9 },
         { source: "唐三藏", target: "紧箍咒", description: "使用", weight: 8 },
         { source: "紧箍咒", target: "孙悟空", description: "束缚", weight: 9 },
 
-        // 事件关联
         { source: "孙悟空", target: "大闹天宫", description: "发起者", weight: 10 },
         { source: "天宫众仙", target: "大闹天宫", description: "镇压", weight: 8 },
         { source: "孙悟空", target: "三打白骨精", description: "主角", weight: 9 },
         { source: "白骨精", target: "三打白骨精", description: "反派", weight: 9 },
         { source: "取经团队", target: "西天取经", description: "执行", weight: 10 },
 
-        // 概念/组织关联
         { source: "唐三藏", target: "佛法", description: "信仰", weight: 9 },
         { source: "如来佛祖", target: "灵山佛界", description: "统治", weight: 10 },
         { source: "灵山佛界", target: "佛法", description: "传承", weight: 10 },
@@ -305,23 +300,23 @@ interface GraphNode {
     source_id: string[];
     x?: number;
     y?: number;
+    z?: number; // 3D
 }
 
-
-
 export default function KnowledgeGraph() {
-    const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
-    const [data, setData] = useState({ nodes: [], links: [] });
+    const fgRef = useRef<any>(undefined); // 3D Graph ref uses generic or specific ForceGraph3D type
+    const [data, setData] = useState<any>({ nodes: [], links: [] });
+    // Highlight Set must be efficient
     const [highlightNodes, setHighlightNodes] = useState(new Set<string>());
     const [highlightLinks, setHighlightLinks] = useState(new Set<string>());
-    const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
+    const [hoverNode, setHoverNode] = useState<any | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+    const [selectedNode, setSelectedNode] = useState<any | null>(null);
 
     useEffect(() => {
         // Simulate loading data and preprocess
         setTimeout(() => {
-            const data = MOCK_DATA as any;
+            const data = JSON.parse(JSON.stringify(MOCK_DATA)); // Deep copy to avoid mutation issues
 
             // Calculate degrees
             const degrees: Record<string, number> = {};
@@ -331,25 +326,80 @@ export default function KnowledgeGraph() {
                 degrees[l.target] = (degrees[l.target] || 0) + 1;
             });
 
-
             // Assign degree to val for sizing if not present, or use as factor
             data.nodes.forEach((n: any) => {
                 n.val = n.val || (degrees[n.id] * 2) || 1;
             });
 
+            // --- Fan Ren Xiu Xian Zhuan (Mortal's Journey) - Core Only ---
+            const extraNodes: any[] = [];
+            const extraLinks: any[] = [];
+
+            // Helper
+            const addGroup = (count: number, prefix: string, type: string, targetId: string, desc: string) => {
+                for (let i = 1; i <= count; i++) {
+                    const id = `${prefix} ${i}`;
+                    extraNodes.push({ id, name: id, type, description: desc, val: 3, source_id: [] });
+                    extraLinks.push({ source: id, target: targetId, description: "隶属", weight: 2 });
+                }
+            };
+
+            // Core Characters
+            extraNodes.push(
+                { id: "韩立", name: "韩立", type: "person", description: "凡人修仙传主角，心思缜密。", val: 25, source_id: ["fr-001"] },
+                { id: "南宫婉", name: "南宫婉", type: "person", description: "韩立的道侣。", val: 18, source_id: ["fr-002"] },
+                { id: "厉飞雨", name: "厉飞雨", type: "person", description: "韩立的发小。", val: 15, source_id: ["fr-003"] },
+                { id: "掌天瓶", name: "掌天瓶", type: "product", description: "韩立的外挂。", val: 20, source_id: ["fr-001"] },
+                { id: "青竹蜂云剑", name: "青竹蜂云剑", type: "product", description: "韩立的本命法宝。", val: 18, source_id: ["fr-004"] },
+                { id: "黄枫谷", name: "黄枫谷", type: "organization", description: "越国七大修仙门派之一。", val: 20, source_id: ["fr-005"] },
+                { id: "乱星海", name: "乱星海", type: "geo", description: "修仙资源丰富的海外区域。", val: 22, source_id: ["fr-006"] },
+                { id: "虚天殿", name: "虚天殿", type: "geo", description: "乱星海第一秘境。", val: 18, source_id: ["fr-007"] }
+            );
+            extraLinks.push(
+                { source: "韩立", target: "南宫婉", description: "道侣", weight: 9 },
+                { source: "韩立", target: "厉飞雨", description: "兄弟", weight: 8 },
+                { source: "韩立", target: "掌天瓶", description: "持有", weight: 10 },
+                { source: "韩立", target: "青竹蜂云剑", description: "本命法宝", weight: 10 },
+                { source: "韩立", target: "黄枫谷", description: "入门", weight: 7 },
+                { source: "韩立", target: "乱星海", description: "游历", weight: 8 },
+                { source: "南宫婉", target: "黄枫谷", description: "邻宗", weight: 5 }
+            );
+
+            // Limited procedural additions
+            addGroup(40, "黄枫谷弟子", "person", "黄枫谷", "越国修仙者，资质各异。");
+            addGroup(50, "乱星海妖兽", "person", "乱星海", "深海中的强大妖兽，浑身是宝。");
+            addGroup(30, "噬金虫", "person", "韩立", "无物不噬的可怕奇虫，韩立的杀手锏。");
+
+            // Re-add West Journey Groups
+            addGroup(30, "花果山猴兵", "person", "花果山", "花果山的普通猴子猴孙。");
+            addGroup(40, "天兵天将", "organization", "天庭", "镇守天庭的士兵。");
+            addGroup(15, "盘丝洞蜘蛛精", "person", "唐三藏", "企图吃唐僧肉的女妖精。");
+
+            data.nodes = [...data.nodes, ...extraNodes];
+            data.links = [...data.links, ...extraLinks];
+
             setData(data);
         }, 500);
     }, []);
 
-    const handleNodeClick = useCallback((node: GraphNode) => {
+    const handleNodeClick = useCallback((node: any) => {
         setSelectedNode(node);
         if (fgRef.current) {
-            fgRef.current.centerAt(node.x, node.y, 1000);
-            fgRef.current.zoom(4, 2000);
+            // Aim at node from distance dist
+            const dist = 60;
+            const distRatio = 1 + dist / Math.hypot(node.x, node.y, node.z);
+
+            fgRef.current.cameraPosition(
+                { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
+                node, // lookAt ({ x, y, z })
+                3000  // ms transition duration
+            );
         }
     }, []);
 
-    const handleNodeHover = (node: GraphNode | null) => {
+    const handleNodeHover = (node: any | null) => {
+        if ((!node && !hoverNode) || (node && hoverNode && node.id === hoverNode.id)) return;
+
         setHoverNode(node || null);
         const newHighlightNodes = new Set<string>();
         const newHighlightLinks = new Set<string>();
@@ -357,196 +407,141 @@ export default function KnowledgeGraph() {
         if (node) {
             newHighlightNodes.add(node.id);
             data.links.forEach((link: any) => {
-                if (link.source.id === node.id || link.target.id === node.id) {
+                const isDirectLink = link.source.id === node.id || link.target.id === node.id;
+                if (isDirectLink) {
                     newHighlightLinks.add(`${link.source.id}-${link.target.id}`);
-                    newHighlightNodes.add(link.source.id);
-                    newHighlightNodes.add(link.target.id);
+                    const neighborId = link.source.id === node.id ? link.target.id : link.source.id;
+                    newHighlightNodes.add(neighborId);
                 }
             });
         }
-
         setHighlightNodes(newHighlightNodes);
         setHighlightLinks(newHighlightLinks);
     };
+
+    // Node Object Generator
+    const nodeThreeObject = useCallback((node: any) => {
+        const group = new THREE.Group();
+
+        // 1. The Sphere
+        const radius = Math.sqrt(node.val) * 1.5;
+        const color = TYPE_COLORS[node.type] || TYPE_COLORS.default;
+
+        const geometry = new THREE.SphereGeometry(radius);
+        const material = new THREE.MeshLambertMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.9
+        });
+        const sphere = new THREE.Mesh(geometry, material);
+        group.add(sphere);
+
+        // 2. The Text Label (SpriteText)
+        const sprite = new SpriteText(node.name);
+        sprite.color = 'white';
+        sprite.textHeight = 4;
+        sprite.position.set(0, radius + 4, 0);
+        group.add(sprite);
+
+        // Save reference for updates
+        // @ts-ignore
+        node.__threeObj = group;
+        // @ts-ignore
+        node.__sphere = sphere;
+        // @ts-ignore
+        node.__sprite = sprite;
+
+        return group;
+    }, []);
+
+    // Frame Update for Focus Mode (Performance Critical)
+    useEffect(() => {
+        if (!data.nodes.length) return;
+
+        data.nodes.forEach((node: any) => {
+            const sphere = node.__sphere;
+            const sprite = node.__sprite;
+            if (!sphere || !sprite) return;
+
+            const isHovered = hoverNode === node;
+            const isSelected = selectedNode?.id === node.id;
+            const isNeighbor = highlightNodes.has(node.id);
+            const isRelevant = isHovered || isSelected || isNeighbor;
+            const hasFocus = (hoverNode || selectedNode) !== null;
+
+            if (hasFocus && !isRelevant) {
+                // Dim
+                sphere.material.opacity = 0.1;
+                sphere.material.color.set('#555');
+                sprite.visible = false;
+            } else {
+                // Active
+                const originalColor = TYPE_COLORS[node.type] || TYPE_COLORS.default;
+                sphere.material.opacity = 1;
+                sphere.material.color.set(originalColor);
+                sprite.visible = true;
+
+                if (isRelevant) {
+                    sphere.material.emissive.set(originalColor);
+                    sphere.material.emissiveIntensity = 0.5;
+                } else {
+                    sphere.material.emissiveIntensity = 0;
+                }
+            }
+        });
+
+    }, [hoverNode, selectedNode, highlightNodes, data.nodes]);
+
 
     const handleSearch = () => {
         if (!searchQuery) return;
         const node = data.nodes.find((n: GraphNode) => n.name.includes(searchQuery));
         if (node) {
-            const gNode = node as GraphNode;
-            if (fgRef.current && gNode.x !== undefined && gNode.y !== undefined) {
-                fgRef.current.centerAt(gNode.x, gNode.y, 1000);
-                fgRef.current.zoom(4, 2000);
-                handleNodeClick(gNode);
-            }
+            handleNodeClick(node); // Fly to node
         }
     }
 
-    const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-        const isHover = highlightNodes.has(node.id) || node === hoverNode;
-        const isSelected = selectedNode?.id === node.id;
-        const isRelevant = isHover || isSelected;
-        const isBackground = (hoverNode || selectedNode) && !isRelevant; // Focus Mode active but node not relevant
-
-        // --- Focus Mode Logic ---
-        // If we are in focus mode (some node is hovered/selected), non-relevant nodes fade out and turn grayscale
-        if (isBackground) {
-            ctx.globalAlpha = 0.2;
-            ctx.filter = 'grayscale(100%)';
-        } else {
-            ctx.globalAlpha = 1;
-            ctx.filter = 'none';
-        }
-
-        const label = node.name;
-        const fontSize = 12 / globalScale;
-        ctx.font = `${fontSize}px Sans-Serif`;
-
-        const color = TYPE_COLORS[node.type] || TYPE_COLORS.default;
-
-        // Dynamic Radius with Breathing Effect for Active Node
-        const baseRadius = Math.sqrt(node.val) * 2;
-        let r = isBackground ? baseRadius * 0.5 : baseRadius; // Shrink background nodes
-
-        if (isSelected || (isHover && !isBackground)) {
-            // Breathing animation calculation (simulated with time if possible, or static burst)
-            // For simple canvas inside paintNode without continuous loop, we typically use a static larger size or rely on engine tick
-            // To fake breathing, we might need a time param, but for strict prop compliance we stick to highlighting size
-            r = baseRadius * 1.2;
-        }
-
-        // Draw Glow (Shadow) for Relevant Nodes
-        if (isRelevant) {
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 15; // Neon glow
-        } else {
-            ctx.shadowBlur = 0;
-        }
-
-        // Draw Circle
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
-        ctx.fillStyle = color;
-        ctx.fill();
-
-        // Reset Shadow for subsequent draws (text/rings)
-        ctx.shadowBlur = 0;
-
-        // Draw Ring if selected (Inner White Ring)
-        if (isRelevant) {
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.lineWidth = 1 / globalScale;
-            ctx.stroke();
-        }
-
-        // Draw Label: Only for relevant nodes or high zoom, OR large nodes
-        // In focus mode, hide background labels to reduce noise
-        const shouldDrawLabel = isRelevant || (globalScale > 1.5 && !isBackground) || (node.val > 15 && !isBackground);
-
-        if (shouldDrawLabel) {
-            ctx.fillStyle = isBackground ? '#94A3B8' : '#334155'; // Faded text for background
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, node.x, node.y + r + fontSize);
-        }
-
-        // Reset Filter
-        ctx.filter = 'none';
-
-    }, [highlightNodes, hoverNode, selectedNode]);
-
-    // Custom Hit Area (Interaction) styling
-    // Even if nodes are visually small (grayscale), we keep their hit area normal sized for easier shifting
-    const paintNodePointerArea = useCallback((node: any, color: string, ctx: CanvasRenderingContext2D) => {
-        const baseRadius = Math.sqrt(node.val) * 2;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, baseRadius + 2, 0, 2 * Math.PI, false); // +2 padding
-        ctx.fillStyle = color;
-        ctx.fill();
-    }, []);
-
-    useEffect(() => {
-        // Add Collision Force to prevent overlap
-        if (fgRef.current) {
-            // @ts-ignore
-            fgRef.current.d3Force('collide', (d3.forceCollide().radius((node: any) => Math.sqrt(node.val) * 2 + 4)).strength(0.7));
-            // @ts-ignore
-            fgRef.current.d3Force('charge').strength(-120); // Increase repulsion
-        }
-    }, [data]); // Re-apply when data changes (or on mount/ref ready)
-
     return (
         <div className="flex h-[calc(100vh-140px)] gap-4">
-            <Card className="flex-1 relative overflow-hidden bg-[#F9FAFB] border border-gray-100 shadow-sm rounded-xl">
-                {/* Toolbar (HUD Style) */}
+            <Card className="flex-1 relative overflow-hidden bg-[#000011] border border-gray-800 shadow-sm rounded-xl">
                 <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 w-72 pointer-events-none">
-                    <div className="pointer-events-auto backdrop-blur-sm bg-white/70 border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.05)] rounded-xl p-1 flex gap-2">
+                    <div className="pointer-events-auto backdrop-blur-sm bg-white/10 border border-white/20 shadow-lg rounded-xl p-1 flex gap-2">
                         <Input
                             placeholder="搜索节点..."
-                            className="border-0 bg-transparent focus-visible:ring-0 text-slate-800 placeholder:text-slate-400 h-9"
+                            className="border-0 bg-transparent focus-visible:ring-0 text-white placeholder:text-gray-400 h-9"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleSearch()}
                         />
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" onClick={handleSearch}>
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleSearch}>
                             <Search size={18} />
-                        </Button>
-                    </div>
-
-                    <div className="pointer-events-auto backdrop-blur-md bg-white/70 border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.05)] rounded-xl p-1.5 flex gap-1 w-fit">
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-600 hover:bg-slate-100/50 rounded-lg" onClick={() => fgRef.current?.zoomToFit(400)}>
-                            <Maximize2 size={16} />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-600 hover:bg-slate-100/50 rounded-lg" onClick={() => fgRef.current?.zoom(fgRef.current.zoom() * 1.2, 400)}>
-                            <ZoomIn size={16} />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-600 hover:bg-slate-100/50 rounded-lg" onClick={() => fgRef.current?.zoom(fgRef.current.zoom() / 1.2, 400)}>
-                            <ZoomOut size={16} />
                         </Button>
                     </div>
                 </div>
 
-                {/* Graph */}
-                <ForceGraph2D
+                <ForceGraph3D
                     ref={fgRef}
                     graphData={data}
                     nodeLabel="name"
-                    nodeRelSize={6}
-                    nodeCanvasObject={paintNode}
-                    nodePointerAreaPaint={paintNodePointerArea}
-                    onNodeClick={(node) => handleNodeClick(node as GraphNode)}
-                    onNodeHover={(node) => handleNodeHover(node ? (node as GraphNode) : null)}
+                    nodeThreeObject={nodeThreeObject}
+                    onNodeClick={handleNodeClick}
+                    onNodeHover={handleNodeHover}
                     linkColor={link => {
                         // @ts-ignore
                         const idStr = `${link.source.id}-${link.target.id}`;
-                        // Highlight: Blue; Normal: Light Gray
-                        return highlightLinks.has(idStr) ? '#296DFF' : '#E2E8F0';
+                        return highlightLinks.has(idStr) ? '#55afff' : '#ffffff';
                     }}
                     linkWidth={link => {
                         // @ts-ignore
                         const idStr = `${link.source.id}-${link.target.id}`;
-                        return highlightLinks.has(idStr) ? 2 : 1;
+                        return highlightLinks.has(idStr) ? 2 : 0.5;
                     }}
-                    linkDirectionalParticles={link => {
-                        // @ts-ignore
-                        const idStr = `${link.source.id}-${link.target.id}`;
-                        return highlightLinks.has(idStr) ? 4 : 0; // 4 particles for highlight links
-                    }}
-                    linkDirectionalParticleWidth={link => {
-                        // @ts-ignore
-                        const idStr = `${link.source.id}-${link.target.id}`;
-                        return highlightLinks.has(idStr) ? 4 : 0;
-                    }}
-                    linkDirectionalParticleSpeed={0.005}
-                    backgroundColor="#F9FAFB" // Light Gray Background
-                    cooldownTicks={100}
-                    onEngineStop={() => fgRef.current?.zoomToFit(400)}
+                    linkOpacity={0.5}
+                    backgroundColor="#000011"
+                    controlType="orbit"
                 />
             </Card>
 
-            {/* Details Sheet/Drawer */}
             <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNode(null)}>
                 <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
                     <SheetHeader>
@@ -575,7 +570,7 @@ export default function KnowledgeGraph() {
                         <div>
                             <h4 className="text-sm font-medium text-gray-500 mb-2">来源文档</h4>
                             <div className="flex flex-col gap-2">
-                                {selectedNode?.source_id.map((id, index) => (
+                                {selectedNode?.source_id.map((id: string, index: number) => (
                                     <div key={index} className="flex items-center gap-2 p-2 rounded border border-gray-100 bg-white hover:bg-gray-50 cursor-pointer text-xs font-mono text-gray-600">
                                         <span className="w-2 h-2 rounded-full bg-blue-400"></span>
                                         {id}
@@ -593,7 +588,7 @@ export default function KnowledgeGraph() {
                             <h4 className="text-sm font-medium text-gray-500 mb-2">关联关系</h4>
                             {/* Find links connected to this node */}
                             <div className="space-y-2">
-                                {data.links.filter((l: any) => l.source.id === selectedNode?.id || l.target.id === selectedNode?.id).map((l: any, idx) => {
+                                {data.links.filter((l: any) => l.source.id === selectedNode?.id || l.target.id === selectedNode?.id).map((l: any, idx: number) => {
                                     const isSource = l.source.id === selectedNode?.id;
                                     const otherNode = isSource ? l.target : l.source;
                                     return (
