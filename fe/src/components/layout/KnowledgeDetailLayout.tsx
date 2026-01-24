@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useParams, useLocation, Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { FileText, Settings, TestTube, ChevronRight, Database } from 'lucide-react';
+import { FileText, Settings, TestTube, ChevronRight, Database, Share2 } from 'lucide-react';
 import { useKnowledgeStore } from '@/store/useKnowledgeStore';
 import { useEffect, useState } from 'react';
 import type { KnowledgeBaseInfo } from '@/types';
@@ -31,6 +31,12 @@ export default function KnowledgeDetailLayout() {
       icon: TestTube,
       href: `/knowledge/${id}/retrieve`,
       active: location.pathname.includes('/retrieve'),
+    },
+    {
+      title: '知识图谱',
+      icon: Share2,
+      href: `/knowledge/${id}/graph`,
+      active: location.pathname.includes('/graph'),
     },
     {
       title: '设置',

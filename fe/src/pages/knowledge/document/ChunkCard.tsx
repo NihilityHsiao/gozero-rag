@@ -13,7 +13,7 @@ interface ChunkCardProps {
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
+
 import { preprocessMarkdown } from '@/utils/markdownUtils';
 
 class MarkdownErrorBoundary extends React.Component<
@@ -85,7 +85,7 @@ const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, selected, onSelect, onEdit
                                     remarkPlugins={[remarkGfm]}
                                     components={{
                                         // 简单优化：防止图片过大破坏布局
-                                        img: ({ node, ...props }) => <span className="text-xs text-gray-400">[图片]</span>,
+                                        img: () => <span className="text-xs text-gray-400">[图片]</span>,
                                         // 链接点击阻止冒泡，避免触发 Card 点击
                                         a: ({ node, ...props }) => <a {...props} onClick={(e) => e.stopPropagation()} target="_blank" className="text-blue-500 hover:underline" />,
                                     }}

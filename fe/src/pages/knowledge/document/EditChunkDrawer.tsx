@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
+
 import { preprocessMarkdown } from '@/utils/markdownUtils';
 
 class MarkdownErrorBoundary extends React.Component<

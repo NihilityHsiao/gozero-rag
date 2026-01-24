@@ -13,6 +13,7 @@ import DatasetCreatePage from '@/pages/dataset/DatasetCreatePage';
 import DocumentEditPage from '@/pages/dataset/DocumentEditPage';
 import KnowledgeSettings from '@/pages/knowledge/KnowledgeSettings';
 import { SettingsLayout, ModelList, UserInfo, TeamManagement } from '@/pages/settings';
+import KnowledgeGraph from '@/pages/knowledge/KnowledgeGraph';
 
 import DocumentDetailPage from '@/pages/knowledge/document/DocumentDetailPage';
 import RetrievalTestPage from '@/pages/knowledge/RetrievalTestPage';
@@ -49,6 +50,7 @@ function App() {
             <Route index element={<Navigate to="documents" replace />} />
             <Route path="documents" element={<DocumentList />} />
             <Route path="document/:docId" element={<DocumentDetailPage />} />
+            <Route path="graph" element={<KnowledgeGraph />} />
             <Route path="settings" element={<KnowledgeSettings />} />
             <Route path="retrieve" element={<RetrievalTestPage />} />
           </Route>
