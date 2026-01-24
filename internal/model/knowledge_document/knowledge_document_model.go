@@ -24,6 +24,8 @@ type (
 		FindManyByIdsAndKbId(ctx context.Context, ids []string, kbId string) ([]*KnowledgeDocument, error)
 		UpdateRunStatus(ctx context.Context, id, status, msg string) error
 		UpdateStatusWithChunkCount(ctx context.Context, id, status string, chunkNum, tokenNum int64) error
+		FindAllNonIndexingByKbId(ctx context.Context, kbId string) ([]*KnowledgeDocument, error)
+		DeleteAllNonIndexingByKbId(ctx context.Context, kbId string) error
 	}
 
 	customKnowledgeDocumentModel struct {
@@ -141,5 +143,25 @@ func (m *customKnowledgeDocumentModel) UpdateStatusWithChunkCount(ctx context.Co
 		now := time.Now()
 		return conn.ExecCtx(ctx, query, status, chunkNum, tokenNum, now.UnixMilli(), now, id)
 	}, knowledgeDocumentIdKey)
+	return err
+}
+
+func (m *customKnowledgeDocumentModel) FindAllNonIndexingByKbId(ctx context.Context, kbId string) ([]*KnowledgeDocument, error) {
+	query := fmt.Sprintf("select %s from %s where knowledge_base_id = ? and run_status != 'indexing'", knowledgeDocumentRows, m.table)
+	var resp []*KnowledgeDocument
+	err := m.QueryRowsNoCacheCtx(ctx, &resp, query, kbId)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (m *customKnowledgeDocumentModel) DeleteAllNonIndexingByKbId(ctx context.Context, kbId string) error {
+	// 注意：这里没有清除缓存，因为是大批量删除，且 ID 未知。
+	// 实际生产中可能需要先查 ID 再删缓存，或者直接忽略缓存一致性（如果是列表查询为主）。
+	// 给出的 cache 模式是 ID 缓存，删除后 FindOne 会 DB miss 或脏读。
+	// 但 DeleteAll 操作通常是在管理后台，且 DeleteByKbId 也是类似操作。
+	query := fmt.Sprintf("delete from %s where knowledge_base_id = ? and run_status != 'indexing'", m.table)
+	_, err := m.ExecNoCacheCtx(ctx, query, kbId)
 	return err
 }

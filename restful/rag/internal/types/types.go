@@ -124,6 +124,13 @@ type CreateKnowledgeBaseResp struct {
 	KnowledgeBaseInfo
 }
 
+type DeleteAllDocumentReq struct {
+	Id string `path:"id"`
+}
+
+type DeleteAllDocumentResp struct {
+}
+
 type DeleteConversationReq struct {
 	ConversationId string `path:"conversation_id"`
 }

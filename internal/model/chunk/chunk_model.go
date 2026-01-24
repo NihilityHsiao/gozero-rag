@@ -46,6 +46,9 @@ type ChunkModel interface {
 	// DeleteByDocId 按文档ID删除 (用于删除文件)
 	DeleteByDocId(ctx context.Context, kbId string, docId string) error
 
+	// DeleteByDocIds 批量按文档ID删除
+	DeleteByDocIds(ctx context.Context, kbId string, docIds []string) error
+
 	// DeleteByKbId 按知识库ID删除 (用于删除知识库)
 	DeleteByKbId(ctx context.Context, kbId string) error
 }

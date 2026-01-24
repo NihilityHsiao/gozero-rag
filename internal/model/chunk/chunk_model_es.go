@@ -282,6 +282,23 @@ func (m *EsChunkModel) DeleteByDocId(ctx context.Context, kbId string, docId str
 	return m.deleteByQuery(ctx, query)
 }
 
+func (m *EsChunkModel) DeleteByDocIds(ctx context.Context, kbId string, docIds []string) error {
+	if len(docIds) == 0 {
+		return nil
+	}
+	query := map[string]interface{}{
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"filter": []map[string]interface{}{
+					{"term": map[string]interface{}{"kb_ids": kbId}},
+					{"terms": map[string]interface{}{"doc_id": docIds}},
+				},
+			},
+		},
+	}
+	return m.deleteByQuery(ctx, query)
+}
+
 func (m *EsChunkModel) DeleteByKbId(ctx context.Context, kbId string) error {
 	query := map[string]interface{}{
 		"query": map[string]interface{}{

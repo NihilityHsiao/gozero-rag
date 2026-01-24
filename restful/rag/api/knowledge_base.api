@@ -102,6 +102,15 @@ type (
     // 更新知识库权限响应
     UpdateKnowledgeBasePermissionResp {
     }
+
+    // 删除所有文档请求
+    DeleteAllDocumentReq {
+        Id string `path:"id"`
+    }
+
+    // 删除所有文档响应
+    DeleteAllDocumentResp {
+    }
 )
 
 @server (
@@ -134,4 +143,8 @@ service rag {
     @doc "更新知识库权限"
     @handler UpdateKnowledgeBasePermission
     patch /:id/permission (UpdateKnowledgeBasePermissionReq) returns (UpdateKnowledgeBasePermissionResp)
+
+    @doc "删除知识库下的所有文档"
+    @handler DeleteAllDocument
+    delete /:id/all (DeleteAllDocumentReq) returns (DeleteAllDocumentResp)
 }

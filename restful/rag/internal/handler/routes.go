@@ -93,6 +93,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: knowledge_base.DeleteKnowledgeBaseHandler(serverCtx),
 			},
 			{
+				// 删除知识库下的所有文档
+				Method:  http.MethodDelete,
+				Path:    "/:id/all",
+				Handler: knowledge_base.DeleteAllDocumentHandler(serverCtx),
+			},
+			{
 				// 更新知识库权限
 				Method:  http.MethodPatch,
 				Path:    "/:id/permission",
