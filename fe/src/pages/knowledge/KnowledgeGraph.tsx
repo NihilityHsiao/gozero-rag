@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d';
+import * as d3 from 'd3-force';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Search, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
@@ -456,6 +457,26 @@ export default function KnowledgeGraph() {
 
     }, [highlightNodes, hoverNode, selectedNode]);
 
+    // Custom Hit Area (Interaction) styling
+    // Even if nodes are visually small (grayscale), we keep their hit area normal sized for easier shifting
+    const paintNodePointerArea = useCallback((node: any, color: string, ctx: CanvasRenderingContext2D) => {
+        const baseRadius = Math.sqrt(node.val) * 2;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, baseRadius + 2, 0, 2 * Math.PI, false); // +2 padding
+        ctx.fillStyle = color;
+        ctx.fill();
+    }, []);
+
+    useEffect(() => {
+        // Add Collision Force to prevent overlap
+        if (fgRef.current) {
+            // @ts-ignore
+            fgRef.current.d3Force('collide', (d3.forceCollide().radius((node: any) => Math.sqrt(node.val) * 2 + 4)).strength(0.7));
+            // @ts-ignore
+            fgRef.current.d3Force('charge').strength(-120); // Increase repulsion
+        }
+    }, [data]); // Re-apply when data changes (or on mount/ref ready)
+
     return (
         <div className="flex h-[calc(100vh-140px)] gap-4">
             <Card className="flex-1 relative overflow-hidden bg-[#F9FAFB] border border-gray-100 shadow-sm rounded-xl">
@@ -494,6 +515,7 @@ export default function KnowledgeGraph() {
                     nodeLabel="name"
                     nodeRelSize={6}
                     nodeCanvasObject={paintNode}
+                    nodePointerAreaPaint={paintNodePointerArea}
                     onNodeClick={(node) => handleNodeClick(node as GraphNode)}
                     onNodeHover={(node) => handleNodeHover(node ? (node as GraphNode) : null)}
                     linkColor={link => {
