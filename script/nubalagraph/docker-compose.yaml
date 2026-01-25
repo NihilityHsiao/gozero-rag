@@ -326,22 +326,58 @@ services:
   
   console:
     image: docker.io/vesoft/nebula-console:v3.8.0
-    entrypoint: ""
-    command: 
-      - sh
+
+    # =========================================================
+    # 修正点 1: 强制指定 entrypoint 为 /bin/sh
+    # 只有这样才能确保它运行我们的脚本，而不是直接运行 console 程序
+    # =========================================================
+    entrypoint: /bin/sh
+
+    # =========================================================
+    # 修正点 2: 保持 nerdctl 必需的交互配置
+    # =========================================================
+    tty: true
+    stdin_open: true
+
+    environment:
+      USER: root
+      TZ: "${TZ}"
+    depends_on:
+      graphd:
+        condition: service_healthy
+
+    # =========================================================
+    # 自动化脚本
+    # =========================================================
+    command:
       - -c
       - |
-        for i in `seq 1 60`;do
-          var=`nebula-console -addr graphd -port 9669 -u root -p nebula -e 'ADD HOSTS "storaged0":9779,"storaged1":9779,"storaged2":9779'`;
-          if [[ $$? == 0 ]];then
-            break;
-          fi;
-          sleep 1;
-          echo "retry to add hosts.";
-        done && tail -f /dev/null;
+        echo ">>> STARTING: Waiting for graphd network..."
+        # 1. 等待端口通畅
+        while ! nc -z graphd 9669; do
+          sleep 1
+        done
+        echo ">>> Graphd port is open!"
 
-    depends_on:
-      - graphd
+        # 2. 循环尝试连接并添加 Host
+        while true; do
+          echo ">>> Executing ADD HOSTS command..."
+          # 注意：这里直接调用 console 工具
+          nebula-console -addr graphd -port 9669 -u root -p nebula -e 'ADD HOSTS "storaged0":9779,"storaged1":9779,"storaged2":9779'
+        
+          if [ $? -eq 0 ]; then
+            echo ">>> SUCCESS: Hosts added successfully!"
+            break
+          fi
+        
+          echo ">>> Failed, retrying in 2 seconds..."
+          sleep 2
+        done
+        
+        # 3. 任务结束，挂起容器
+        echo ">>> All done. Container is idling."
+        tail -f /dev/null
+
     networks:
       - nebula-net
 
