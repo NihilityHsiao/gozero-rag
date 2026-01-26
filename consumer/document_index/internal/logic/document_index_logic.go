@@ -359,7 +359,7 @@ func (l *DocumentIndexLogic) buildChunksWithEmbedding(ctx context.Context, ic *i
 	})
 
 	// 批量生成向量
-	vectors, err := ic.embedder.EmbedStrings(ctx, contents)
+	vectors, err := l.embedStringsBatched(ctx, ic, contents)
 	if err != nil {
 		return nil, 0, fmt.Errorf("生成 Embedding 失败: %w", err)
 	}
@@ -420,7 +420,7 @@ func (l *DocumentIndexLogic) buildQAChunks(ctx context.Context, ic *indexContext
 		})
 
 		// 批量生成 QA 向量
-		qaVectors, err := ic.embedder.EmbedStrings(ctx, questions)
+		qaVectors, err := l.embedStringsBatched(ctx, ic, questions)
 		if err != nil {
 			logx.Errorf("[DocIndex] QA 向量生成失败: %v", err)
 			continue
@@ -510,4 +510,26 @@ func (l *DocumentIndexLogic) recordSuccessMetrics(ic *indexContext, totalChunks,
 
 	logx.Infof("[DocIndex] DocumentId=%s 索引成功. ContentChunks=%d, QAChunks=%d, Total=%d",
 		ic.msg.DocumentId, contentChunks, qaChunks, totalChunks)
+}
+
+// embedStringsBatched 分批生成向量，避免 413 Payload Too Large
+func (l *DocumentIndexLogic) embedStringsBatched(ctx context.Context, ic *indexContext, texts []string) ([][]float64, error) {
+	const batchSize = 10 // 每次请求最多处理 10 个文本
+	var allVectors [][]float64
+
+	for i := 0; i < len(texts); i += batchSize {
+		end := i + batchSize
+		if end > len(texts) {
+			end = len(texts)
+		}
+
+		batchTexts := texts[i:end]
+		vectors, err := ic.embedder.EmbedStrings(ctx, batchTexts)
+		if err != nil {
+			return nil, fmt.Errorf("batch embedding failed at index %d: %w", i, err)
+		}
+		allVectors = append(allVectors, vectors...)
+	}
+
+	return allVectors, nil
 }

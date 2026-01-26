@@ -115,6 +115,13 @@ func (l *CreateKnowledgeBaseLogic) CreateKnowledgeBase(req *types.CreateKnowledg
 		return nil, xerr.NewInternalErrMsg("创建知识库失败")
 	}
 
+	// 6. 确保 NebulaGraph Space 和 Schema 存在 (异步或同步)
+	// 为了保证用户创建完就能立即访问图谱(哪怕是空的)，这里同步执行
+	if err := l.svcCtx.NebulaGraphModel.EnsureSpaceAndSchema(l.ctx, kbId); err != nil {
+		logx.Errorf("CreateKnowledgeBase EnsureSpaceAndSchema error: %v", err)
+		// 不阻断流程，仅记录错误。后续写入数据时还会尝试 Ensure
+	}
+
 	return &types.CreateKnowledgeBaseResp{
 		KnowledgeBaseInfo: types.KnowledgeBaseInfo{
 			Id:                     kbId,
