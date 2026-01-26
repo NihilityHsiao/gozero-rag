@@ -84,14 +84,20 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 		return err
 	}
 
-	// 5. Transform to ES Documents
-	esDocs := l.transformToEsDocs(extractResult, msg.KnowledgeBaseId)
-
-	// 6. Save to ES
-	if err := l.svcCtx.GraphModel.Put(ctx, esDocs); err != nil {
-		logx.Errorf("save graph to es failed: %v", err)
+	// 5. Save to NebulaGraph
+	if err := l.saveToNebula(ctx, extractResult, msg.KnowledgeBaseId); err != nil {
+		logx.Errorf("save graph to nebula failed: %v", err)
 		return err
 	}
+
+	// 6. Transform to ES Documents
+	//esDocs := l.transformToEsDocs(extractResult, msg.KnowledgeBaseId)
+
+	// 7. Save to ES
+	//if err := l.svcCtx.GraphModel.Put(ctx, esDocs); err != nil {
+	//	logx.Errorf("save graph to es failed: %v", err)
+	//	return err
+	//}
 
 	logx.Infof("graph extraction completed for doc: %s", msg.DocumentId)
 	return nil
@@ -157,4 +163,25 @@ func (l *GraphExtractLogic) genRelationId(kbId, src, dst string) string {
 
 func (l *GraphExtractLogic) nowStr() string {
 	return time.Now().Format(time.RFC3339)
+}
+
+// saveToNebula 将图谱数据存储到 NebulaGraph
+// 只调用 Model 层接口，不写 nGQL 语句
+func (l *GraphExtractLogic) saveToNebula(ctx context.Context, result *types.GraphExtractionResult, kbId string) error {
+	// 1. 确保 Space 和 Schema 存在
+	if err := l.svcCtx.NebulaGraphModel.EnsureSpaceAndSchema(ctx, kbId); err != nil {
+		return err
+	}
+
+	// 2. 批量写入实体
+	if err := l.svcCtx.NebulaGraphModel.BatchUpsertEntities(ctx, kbId, result.Entities); err != nil {
+		return err
+	}
+
+	// 3. 批量写入关系
+	if err := l.svcCtx.NebulaGraphModel.BatchInsertRelations(ctx, kbId, result.Relations); err != nil {
+		return err
+	}
+
+	return nil
 }

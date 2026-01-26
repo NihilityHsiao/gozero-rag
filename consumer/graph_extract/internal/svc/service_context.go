@@ -13,11 +13,12 @@ import (
 )
 
 type ServiceContext struct {
-	Config         config.Config
-	TenantLlmModel tenant_llm.TenantLlmModel
-	ChunkModel     chunk.ChunkModel
-	GraphModel     graph.GraphModel
-	GraphExtractor *extractor.GraphExtractor
+	Config           config.Config
+	TenantLlmModel   tenant_llm.TenantLlmModel
+	ChunkModel       chunk.ChunkModel
+	GraphModel       graph.GraphModel       // ES 图数据存储
+	NebulaGraphModel graph.NebulaGraphModel // Nebula 图数据存储 (新增)
+	GraphExtractor   *extractor.GraphExtractor
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -37,6 +38,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(err)
 	}
 
+	// Init Nebula Graph Model (新增)
+	nebulaGraphModel, err := graph.NewNebulaGraphModel(c.Nebula.Addresses, c.Nebula.Username, c.Nebula.Password)
+	if err != nil {
+		logx.Errorf("NewNebulaGraphModel failed: %v", err)
+		panic(err)
+	}
+
 	// Init Graph Extractor (Singleton)
 	graphExtractor, err := extractor.NewGraphExtractor(context.Background())
 	if err != nil {
@@ -45,10 +53,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	return &ServiceContext{
-		Config:         c,
-		TenantLlmModel: tenant_llm.NewTenantLlmModel(sqlConn, c.Cache),
-		ChunkModel:     chunkModel,
-		GraphModel:     graphModel,
-		GraphExtractor: graphExtractor,
+		Config:           c,
+		TenantLlmModel:   tenant_llm.NewTenantLlmModel(sqlConn, c.Cache),
+		ChunkModel:       chunkModel,
+		GraphModel:       graphModel,
+		NebulaGraphModel: nebulaGraphModel,
+		GraphExtractor:   graphExtractor,
 	}
 }

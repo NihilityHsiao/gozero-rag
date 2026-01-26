@@ -23,3 +23,10 @@ ElasticSearch:
     - http://127.0.0.1:9200
   Username:
   Password:
+
+Nebula:
+  Addresses:
+    - 192.168.0.6:49174
+    - 192.168.0.6:49171
+  Username: root
+  Password: nebula
