@@ -22,7 +22,7 @@ export function GraphDetailPanel({ node, links, onClose, onNavigateToNode, typeC
     const nodeLinks = links.filter(l => (l.source.id || l.source) === node.id || (l.target.id || l.target) === node.id);
 
     return (
-        <div className="absolute top-4 right-4 bottom-4 w-96 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex flex-col z-30 transition-transform duration-300 ring-1 ring-white/10">
+        <div className="absolute top-4 left-4 bottom-4 w-96 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex flex-col z-30 transition-transform duration-300 ring-1 ring-white/10">
             {/* Header */}
             <div className="p-5 border-b border-slate-700/50 flex justify-between items-start bg-slate-800/30 rounded-t-2xl">
                 <div className="flex items-start gap-4">
