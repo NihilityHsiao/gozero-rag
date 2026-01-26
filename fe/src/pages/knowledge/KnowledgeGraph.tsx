@@ -2,26 +2,21 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
 import SpriteText from 'three-spritetext';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Search, ZoomIn, ZoomOut, Maximize, Loader2 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
-} from "@/components/ui/sheet";
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-
-import { useParams } from 'react-router-dom';
-import { getKnowledgeGraph, searchKnowledgeGraph } from '@/api/knowledge';
-import type { GraphNode, GraphLink } from '@/types';
+import { Loader2 } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-// Node Colors by Type (Dify-like Light Theme Palette)
+import { getKnowledgeGraph, searchKnowledgeGraph } from '@/api/knowledge';
+import type { GraphNode, GraphLink } from '@/types/graph';
+
+// Import New Components
+import { FloatingSearch } from './GraphComponents/FloatingSearch';
+import { GraphStats } from './GraphComponents/GraphStats';
+import { GraphControls } from './GraphComponents/GraphControls';
+import { GraphDetailPanel } from './GraphComponents/GraphDetailPanel';
+import { Button } from '@/components/ui/button';
+
+// Node Colors by Type (Dify-like Light Theme Palette) - Reused
 const TYPE_COLORS: Record<string, string> = {
     person: '#296DFF',      // Brighter Blue (Primary)
     geo: '#00BFA5',         // Teal
@@ -34,9 +29,11 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function KnowledgeGraph() {
     const { id: kbId } = useParams();
+    const navigate = useNavigate();
     const fgRef = useRef<any>(undefined);
+
+    // State
     const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] });
-    // Highlight Set must be efficient
     const [highlightNodes, setHighlightNodes] = useState(new Set<string>());
     const [highlightLinks, setHighlightLinks] = useState(new Set<string>());
     const [hoverNode, setHoverNode] = useState<any | null>(null);
@@ -49,10 +46,9 @@ export default function KnowledgeGraph() {
         setLoading(true);
         try {
             const res = await getKnowledgeGraph(kbId);
-            // Process nodes to ensure val exists or calculate degrees if needed
+            // Process nodes (calculate degrees if needed for sizing)
             const degrees: Record<string, number> = {};
             res.links.forEach((l: any) => {
-                // l.source is string initially
                 const s = typeof l.source === 'object' ? l.source.id : l.source;
                 const t = typeof l.target === 'object' ? l.target.id : l.target;
                 degrees[s] = (degrees[s] || 0) + 1;
@@ -74,21 +70,35 @@ export default function KnowledgeGraph() {
         fetchData();
     }, [fetchData]);
 
+    // Graph Interaction Handlers
     const handleNodeClick = useCallback((node: any) => {
         setSelectedNode(node);
 
         if (fgRef.current) {
             // Aim at node from outside it
-            const distance = 40;
+            const distance = 60;
             const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
 
             fgRef.current.cameraPosition(
                 { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
                 node, // lookAt ({ x, y, z })
-                1000  // ms transition duration
+                1500  // ms transition duration
             );
         }
     }, []);
+
+    const handleNodeFocus = useCallback(() => {
+        if (selectedNode && fgRef.current) {
+            const distance = 40;
+            const distRatio = 1 + distance / Math.hypot(selectedNode.x, selectedNode.y, selectedNode.z);
+
+            fgRef.current.cameraPosition(
+                { x: selectedNode.x * distRatio, y: selectedNode.y * distRatio, z: selectedNode.z * distRatio },
+                selectedNode,
+                1000
+            );
+        }
+    }, [selectedNode]);
 
     const handleNodeHover = (node: any | null) => {
         if ((!node && !hoverNode) || (node && hoverNode && node.id === hoverNode.id)) return;
@@ -112,7 +122,7 @@ export default function KnowledgeGraph() {
         setHighlightLinks(newHighlightLinks);
     };
 
-    // Node Object Generator
+    // Node Object Generator (Enhanced Material)
     const nodeThreeObject = useCallback((node: any) => {
         const group = new THREE.Group();
 
@@ -124,15 +134,17 @@ export default function KnowledgeGraph() {
         const material = new THREE.MeshLambertMaterial({
             color: color,
             transparent: true,
-            opacity: 0.9
+            opacity: 0.9,
+            emissive: color,
+            emissiveIntensity: 0.2
         });
         const sphere = new THREE.Mesh(geometry, material);
         group.add(sphere);
 
         // 2. The Text Label (SpriteText)
         const sprite = new SpriteText(node.name);
-        sprite.color = 'rgba(255, 255, 255, 0.9)'; // Bright white for contrast against deep space
-        sprite.textHeight = 4;
+        sprite.color = 'rgba(255, 255, 255, 0.95)';
+        sprite.textHeight = 4 + (node.val * 0.2); // Scale text slightly with value
         sprite.position.set(0, radius + 4, 0);
         group.add(sprite);
 
@@ -147,14 +159,14 @@ export default function KnowledgeGraph() {
         return group;
     }, []);
 
-    // Frame Update for Focus Mode (Performance Critical)
+    // Frame Update for Focus/Highlight Mode
     useEffect(() => {
         if (!data.nodes.length) return;
 
         data.nodes.forEach((node: any) => {
             const sphere = node.__sphere;
             const sprite = node.__sprite;
-            if (!sphere || !sprite) return;
+            if (!sphere || !sprite) return; // Wait for initialization
 
             const isHovered = hoverNode === node;
             const isSelected = selectedNode?.id === node.id;
@@ -163,52 +175,52 @@ export default function KnowledgeGraph() {
             const hasFocus = (hoverNode || selectedNode) !== null;
 
             if (hasFocus && !isRelevant) {
-                // Dim
+                // Dim irrelevant nodes
                 sphere.material.opacity = 0.1;
-                sphere.material.color.set('#cbd5e1'); // Light gray dim
-                sprite.visible = false;
+                sphere.material.emissiveIntensity = 0;
+                sprite.material.opacity = 0.2; // Fade text but keep visible
             } else {
-                // Active
+                // Active nodes
                 const originalColor = TYPE_COLORS[node.type] || TYPE_COLORS.default;
                 sphere.material.opacity = 0.9;
                 sphere.material.color.set(originalColor);
-                sprite.visible = true;
 
+                // Highlight Effect
                 if (isRelevant) {
                     sphere.material.emissive.set(originalColor);
-                    sphere.material.emissiveIntensity = 0.6; // Increased glow
+                    sphere.material.emissiveIntensity = isSelected ? 0.8 : 0.5;
+                    sprite.material.opacity = 1;
                 } else {
-                    sphere.material.emissiveIntensity = 0;
+                    sphere.material.emissiveIntensity = 0.2;
+                    sprite.material.opacity = 0.9;
                 }
             }
         });
 
     }, [hoverNode, selectedNode, highlightNodes, data.nodes]);
 
-    // Starfield Effect
+    // Starfield Background Effect
     useEffect(() => {
         if (!fgRef.current) return;
-
         const scene = fgRef.current.scene();
 
         // Create Stars
         const starsGeometry = new THREE.BufferGeometry();
-        const starsCount = 1500;
+        const starsCount = 2000;
         const posArray = new Float32Array(starsCount * 3);
 
         for (let i = 0; i < starsCount * 3; i++) {
-            // Spread stars far away
-            posArray[i] = (Math.random() - 0.5) * 2000;
+            posArray[i] = (Math.random() - 0.5) * 3000;
         }
 
         starsGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
 
         // Star Material
         const starsMaterial = new THREE.PointsMaterial({
-            size: 2,
-            color: 0x4f90ff, // Light Blue tint
+            size: 1.5,
+            color: 0x6366f1, // Indigo tint
             transparent: true,
-            opacity: 0.8,
+            opacity: 0.6,
             blending: THREE.AdditiveBlending,
             sizeAttenuation: true
         });
@@ -224,17 +236,17 @@ export default function KnowledgeGraph() {
 
     }, []);
 
-
     const handleSearch = async () => {
         if (!kbId) return;
         if (!searchQuery.trim()) {
-            fetchData(); // Reset to full graph
+            fetchData();
             return;
         }
 
         try {
             const res = await searchKnowledgeGraph(kbId, { q: searchQuery });
-            // Similar processing if needed
+            // Reuse processing logic
+            // Note: In real app, consider extracting this duplicate logic
             const degrees: Record<string, number> = {};
             res.links.forEach((l: any) => {
                 const s = typeof l.source === 'object' ? l.source.id : l.source;
@@ -253,23 +265,15 @@ export default function KnowledgeGraph() {
         }
     };
 
+    // Zoom Controls
     const handleZoomIn = () => {
         if (fgRef.current) {
             const currentPos = fgRef.current.cameraPosition();
             const target = fgRef.current.controls().target;
-
-            // Vector from Target to Camera
-            const v = {
-                x: currentPos.x - target.x,
-                y: currentPos.y - target.y,
-                z: currentPos.z - target.z
-            };
-
-            // Zoom In: multiple by < 1
+            const v = { x: currentPos.x - target.x, y: currentPos.y - target.y, z: currentPos.z - target.z };
             fgRef.current.cameraPosition(
                 { x: target.x + v.x * 0.6, y: target.y + v.y * 0.6, z: target.z + v.z * 0.6 },
-                target, // lookAt
-                400
+                target, 400
             );
         }
     };
@@ -278,170 +282,115 @@ export default function KnowledgeGraph() {
         if (fgRef.current) {
             const currentPos = fgRef.current.cameraPosition();
             const target = fgRef.current.controls().target;
-
-            // Vector from Target to Camera
-            const v = {
-                x: currentPos.x - target.x,
-                y: currentPos.y - target.y,
-                z: currentPos.z - target.z
-            };
-
-            // Zoom Out: multiply by > 1
+            const v = { x: currentPos.x - target.x, y: currentPos.y - target.y, z: currentPos.z - target.z };
             fgRef.current.cameraPosition(
                 { x: target.x + v.x * 1.4, y: target.y + v.y * 1.4, z: target.z + v.z * 1.4 },
-                target, // lookAt
-                400
+                target, 400
             );
         }
     };
 
     const handleZoomToFit = () => {
-        if (fgRef.current) {
-            fgRef.current.zoomToFit(1000, 50);
-        }
+        if (fgRef.current) fgRef.current.zoomToFit(1000, 50);
     };
 
     return (
-        <div className="flex h-[calc(100vh-140px)] gap-4">
-            <Card className="flex-1 relative overflow-hidden border border-gray-800 shadow-xl rounded-xl"
+        <div className="relative w-full h-[calc(100vh-64px)] overflow-hidden bg-black">
+            {/* Deep Space Background Gradient */}
+            <div
+                className="absolute inset-0 pointer-events-none z-0"
                 style={{
-                    background: 'radial-gradient(circle at center, #0B1121 0%, #000000 100%)' // Deep Blue to Pure Black
+                    background: 'radial-gradient(circle at center, #1e1b4b 0%, #020617 100%)' // Indigo-950 to Slate-950
                 }}
-            >
-                {/* Optional: Vignette overlay for extra depth */}
-                <div className="absolute inset-0 bg-[radial-gradient(transparent_0%,#000000_100%)] opacity-60 pointer-events-none" />
+            />
 
-                {loading && (
-                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
-                        <Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-4" />
-                        <p className="text-gray-300">正在构建知识图谱...</p>
-                    </div>
-                )}
+            {/* Loading Overlay */}
+            {loading && (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm text-white">
+                    <Loader2 className="h-10 w-10 text-indigo-500 animate-spin mb-4" />
+                    <p className="text-slate-300 tracking-wider font-light">Loading Neural Network...</p>
+                </div>
+            )}
 
-                {!loading && data.nodes.length === 0 && (
-                    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center pointer-events-none">
-                        <div className="bg-black/40 backdrop-blur-md p-6 rounded-xl border border-white/10 text-center pointer-events-auto max-w-md">
-                            <div className="text-gray-400 mb-2">暂无图谱数据</div>
-                            <p className="text-sm text-gray-500 mb-4">请确保已上传并解析了相关文档 (NebulaGraph extraction required)</p>
-                            <Button variant="outline" size="sm" onClick={fetchData}>
-                                重新加载
-                            </Button>
-                        </div>
-                    </div>
-                )}
-
-                <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 w-auto min-w-[300px] pointer-events-none">
-                    <div className="pointer-events-auto backdrop-blur-md bg-black/40 border border-white/10 shadow-lg rounded-xl p-1 flex gap-1 items-center">
-                        <Input
-                            placeholder="搜索节点..."
-                            className="border-0 bg-transparent focus-visible:ring-0 text-white placeholder:text-gray-400 h-9 w-64"
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                        />
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleSearch}>
-                            <Search size={18} />
-                        </Button>
-                        <Separator orientation="vertical" className="h-6 bg-white/10 mx-1" />
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomIn} title="放大">
-                            <ZoomIn size={18} />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomOut} title="缩小">
-                            <ZoomOut size={18} />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" onClick={handleZoomToFit} title="全览">
-                            <Maximize size={18} />
+            {/* Empty State */}
+            {!loading && data.nodes.length === 0 && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center pointer-events-none">
+                    <div className="bg-slate-900/60 backdrop-blur-md p-8 rounded-2xl border border-slate-700/50 text-center pointer-events-auto max-w-md shadow-2xl">
+                        <div className="text-indigo-400 mb-3 text-lg font-medium">No Knowledge Graph Data</div>
+                        <p className="text-slate-400 mb-6 font-light">No entities found. Ensure documents are parsed with extraction enabled.</p>
+                        <Button
+                            variant="outline"
+                            className="border-indigo-500/50 text-indigo-300 hover:text-white hover:bg-indigo-500/20"
+                            onClick={fetchData}
+                        >
+                            Reload Graph
                         </Button>
                     </div>
                 </div>
+            )}
 
-                <ForceGraph3D
-                    ref={fgRef}
-                    graphData={data}
-                    nodeLabel="name"
-                    nodeThreeObject={nodeThreeObject}
-                    onNodeClick={handleNodeClick}
-                    onNodeHover={handleNodeHover}
-                    linkColor={link => {
-                        // @ts-ignore
-                        const idStr = `${link.source.id}-${link.target.id}`;
-                        // Highlight: Cyan Blue, Normal: Faint Blue
-                        return highlightLinks.has(idStr) ? '#00e5ff' : 'rgba(100, 149, 237, 0.2)';
-                    }}
-                    linkWidth={link => {
-                        // @ts-ignore
-                        const idStr = `${link.source.id}-${link.target.id}`;
-                        return highlightLinks.has(idStr) ? 2 : 0.5;
-                    }}
-                    linkOpacity={0.5}
-                    backgroundColor="rgba(0,0,0,0)" // Transparent to let radial gradient show
-                    controlType="orbit"
-                />
-            </Card>
+            {/* Floating UI Layers */}
+            <FloatingSearch
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onSearchEnter={handleSearch}
+            />
 
-            <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNode(null)}>
-                <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-                    <SheetHeader>
-                        <SheetTitle className="flex items-center gap-2 text-xl">
-                            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: TYPE_COLORS[selectedNode?.type || 'default'] }}></div>
-                            {selectedNode?.name}
-                        </SheetTitle>
-                        <SheetDescription>
-                            <div className="flex gap-2 mt-2">
-                                <Badge variant="outline">{selectedNode?.type}</Badge>
-                                <Badge variant="secondary">Value: {selectedNode?.val}</Badge>
-                            </div>
-                        </SheetDescription>
-                    </SheetHeader>
+            <GraphStats
+                nodeCount={data.nodes.length}
+                linkCount={data.links.length}
+            />
 
-                    <div className="mt-6 space-y-6">
-                        <div>
-                            <h4 className="text-sm font-medium text-gray-500 mb-2">描述</h4>
-                            <p className="text-gray-900 leading-relaxed bg-gray-50 p-3 rounded-lg text-sm">
-                                {selectedNode?.description}
-                            </p>
-                        </div>
+            <GraphControls
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onZoomToFit={handleZoomToFit}
+                onFocus={handleNodeFocus}
+            />
 
-                        <Separator />
+            <GraphDetailPanel
+                node={selectedNode}
+                links={data.links}
+                typeColors={TYPE_COLORS}
+                onClose={() => setSelectedNode(null)}
+                onNavigateToNode={(nodeId) => {
+                    // Find the node object in data
+                    const target = data.nodes.find(n => n.id === nodeId);
+                    if (target) handleNodeClick(target);
+                }}
+            />
 
-                        <div>
-                            <h4 className="text-sm font-medium text-gray-500 mb-2">来源文档</h4>
-                            <div className="flex flex-col gap-2">
-                                {selectedNode?.source_id?.map((id: string, index: number) => (
-                                    <div key={index} className="flex items-center gap-2 p-2 rounded border border-gray-100 bg-white hover:bg-gray-50 cursor-pointer text-xs font-mono text-gray-600">
-                                        <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-                                        {id}
-                                    </div>
-                                ))}
-                                {(!selectedNode?.source_id || selectedNode?.source_id.length === 0) && (
-                                    <span className="text-gray-400 text-sm">无关联文档</span>
-                                )}
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        <div>
-                            <h4 className="text-sm font-medium text-gray-500 mb-2">关联关系</h4>
-                            {/* Find links connected to this node */}
-                            <div className="space-y-2">
-                                {data.links.filter((l: any) => l.source.id === selectedNode?.id || l.target.id === selectedNode?.id).map((l: any, idx: number) => {
-                                    const isSource = l.source.id === selectedNode?.id;
-                                    const otherNode = isSource ? l.target : l.source;
-                                    return (
-                                        <div key={idx} className="flex items-center justify-between p-2 rounded bg-gray-50 text-sm">
-                                            <span className="text-gray-600 w-1/3 truncate text-right">{isSource ? 'This' : otherNode.name}</span>
-                                            <span className="px-2 text-xs text-gray-400">--- {l.description} ({l.weight}) ---&gt;</span>
-                                            <span className="text-gray-900 w-1/3 truncate font-medium">{isSource ? otherNode.name : 'This'}</span>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                    </div>
-                </SheetContent>
-            </Sheet>
+            {/* 3D Force Graph */}
+            <ForceGraph3D
+                ref={fgRef}
+                graphData={data}
+                nodeLabel="name"
+                nodeThreeObject={nodeThreeObject}
+                onNodeClick={handleNodeClick}
+                onNodeHover={handleNodeHover}
+                backgroundColor="rgba(0,0,0,0)"
+                showNavInfo={false}
+                linkColor={link => {
+                    // @ts-ignore
+                    const idStr = `${link.source.id}-${link.target.id}`;
+                    // Highlight: Bright Cyan, Normal: Faint Indigo
+                    return highlightLinks.has(idStr) ? '#22d3ee' : 'rgba(99, 102, 241, 0.15)';
+                }}
+                linkWidth={link => {
+                    // @ts-ignore
+                    const idStr = `${link.source.id}-${link.target.id}`;
+                    return highlightLinks.has(idStr) ? 2 : 0.5;
+                }}
+                linkDirectionalParticles={2}
+                linkDirectionalParticleSpeed={0.005}
+                linkDirectionalParticleWidth={link => {
+                    // @ts-ignore
+                    const idStr = `${link.source.id}-${link.target.id}`;
+                    return highlightLinks.has(idStr) ? 3 : 1;
+                }}
+                linkOpacity={0.3}
+                controlType="orbit"
+            />
         </div>
     );
 }
