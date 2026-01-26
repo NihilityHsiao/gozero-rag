@@ -6,6 +6,8 @@ import type {
   CreateKnowledgeBaseResp,
   UpdateKnowledgeBaseReq,
   KnowledgeBaseInfo,
+  GraphDetailResp,
+
 } from '@/types';
 
 export const getKnowledgeList = (params: GetKnowledgeBaseListReq) => {
@@ -36,4 +38,14 @@ export const getTenantLlmList = (params?: { model_type?: string }) => {
 // 更新知识库权限
 export const updateKnowledgeBasePermission = (id: string, permission: string) => {
   return request.patch<any, void>(`/knowledge/${id}/permission`, { permission });
+};
+
+// 获取知识图谱数据
+export const getKnowledgeGraph = (kb_id: string, params?: { limit?: number }) => {
+  return request.get<any, GraphDetailResp>(`/knowledge/${kb_id}/graph`, { params });
+};
+
+// 搜索图谱节点
+export const searchKnowledgeGraph = (kb_id: string, params: { q: string }) => {
+  return request.get<any, GraphDetailResp>(`/knowledge/${kb_id}/graph/search`, { params });
 };

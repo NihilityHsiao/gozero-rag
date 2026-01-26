@@ -10,6 +10,7 @@ import "./api/chat.api"
 import "./api/llm_factories.api"
 import "./api/tenant_llm.api"
 import "./api/team.api"
+import "./api/graph.api"
 
 info (
 	title:       "rag api 服务"

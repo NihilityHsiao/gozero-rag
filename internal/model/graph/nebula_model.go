@@ -9,6 +9,7 @@ import (
 	"gozero-rag/internal/graphrag/types"
 
 	nebula "github.com/vesoft-inc/nebula-go/v3"
+	ngen "github.com/vesoft-inc/nebula-go/v3/nebula"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -23,6 +24,12 @@ type NebulaGraphModel interface {
 
 	// BatchInsertRelations 批量写入关系到指定 kbId 的 Space
 	BatchInsertRelations(ctx context.Context, kbId string, relations []types.Relation) error
+
+	// GetGraph 获取图谱数据 (支持 limit 限制)
+	GetGraph(ctx context.Context, kbId string, limit int) ([]types.Entity, []types.Relation, error)
+
+	// SearchGraphNodes 搜索图谱节点
+	SearchGraphNodes(ctx context.Context, kbId string, query string) ([]types.Entity, error)
 
 	// Close 关闭连接池
 	Close()
@@ -85,9 +92,7 @@ func (m *nebulaGraphModel) Close() {
 }
 
 // getSpaceName 根据 kbId 生成 Space 名称
-// Space 名不支持 "-" 符号，将 UUID-v7 中的 "-" 转换为 "_"
 func getSpaceName(kbId string) string {
-	// 将 "-" 替换为 "_"
 	safeKbId := strings.ReplaceAll(kbId, "-", "_")
 	return fmt.Sprintf("kg_%s", safeKbId)
 }
@@ -149,8 +154,16 @@ func (m *nebulaGraphModel) EnsureSpaceAndSchema(ctx context.Context, kbId string
 		return fmt.Errorf("create edge type failed: %w", err)
 	}
 
-	// 等待 Schema 生效
-	time.Sleep(2 * time.Second)
+	// 5. 创建 Index (MATCH查询需要)
+	createIndexNgql := "CREATE TAG INDEX IF NOT EXISTS entity_index ON entity(name(64));"
+	if _, err := session.Execute(createIndexNgql); err != nil {
+		return fmt.Errorf("create index failed: %w", err)
+	}
+
+	// 等待 Index 生效 (需要重建索引)
+	// REBUILD TAG INDEX entity_index; (通常首次创建不需要重建，但如果是后续添加需重建)
+	// 这里简单等待
+	time.Sleep(3 * time.Second)
 
 	logx.Infof("ensured nebula space and schema for kb: %s (space: %s)", kbId, spaceName)
 	return nil
@@ -253,6 +266,180 @@ func (m *nebulaGraphModel) BatchInsertRelations(ctx context.Context, kbId string
 
 	logx.Infof("inserted %d/%d relations to space %s", successCount, len(relations), spaceName)
 	return nil
+}
+
+// GetGraph 获取图谱数据 (支持 limit 限制)
+func (m *nebulaGraphModel) GetGraph(ctx context.Context, kbId string, limit int) ([]types.Entity, []types.Relation, error) {
+	spaceName := getSpaceName(kbId)
+
+	session, err := m.pool.GetSession(m.username, m.password)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get session failed: %w", err)
+	}
+	defer session.Release()
+
+	// 切换 Space
+	if _, err := session.Execute(fmt.Sprintf("USE %s;", spaceName)); err != nil {
+		return nil, nil, fmt.Errorf("use space failed: %w", err)
+	}
+
+	// 执行 nGQL 查询
+	// MATCH (v:entity)-[e:relates_to]->(v2:entity) RETURN properties(v), properties(e), properties(v2) LIMIT {limit}
+	ngql := fmt.Sprintf("MATCH (v:entity)-[e:relates_to]->(v2:entity) RETURN properties(v) AS `src`, properties(e) AS `edge`, properties(v2) AS `dst` LIMIT %d;", limit)
+
+	resultSet, err := session.Execute(ngql)
+	if err != nil {
+		return nil, nil, fmt.Errorf("execute ngql failed: %w", err)
+	}
+	if !resultSet.IsSucceed() {
+		// 如果 Space 不存在或还没有数据，可能报错，视为为空
+		if strings.Contains(resultSet.GetErrorMsg(), "SpaceNotFound") {
+			return []types.Entity{}, []types.Relation{}, nil
+		}
+		return nil, nil, fmt.Errorf("query graph failed: %s", resultSet.GetErrorMsg())
+	}
+
+	// 解析结果
+	entitiesMap := make(map[string]types.Entity)
+	relations := make([]types.Relation, 0)
+
+	rows := resultSet.GetRows()
+	for _, row := range rows {
+		// row.Values 是 []*ngen.Value
+		if len(row.Values) < 3 {
+			continue
+		}
+		srcVal := row.Values[0]
+		edgeVal := row.Values[1]
+		dstVal := row.Values[2]
+
+		// 解析实体
+		var srcKvs, dstKvs map[string]*ngen.Value
+		if srcVal.GetMVal() != nil {
+			srcKvs = srcVal.GetMVal().Kvs
+		}
+		if dstVal.GetMVal() != nil {
+			dstKvs = dstVal.GetMVal().Kvs
+		}
+
+		srcEntity := parseEntityFromMap(srcKvs)
+		dstEntity := parseEntityFromMap(dstKvs)
+
+		if srcEntity.Name != "" {
+			entitiesMap[srcEntity.Name] = srcEntity
+		}
+		if dstEntity.Name != "" {
+			entitiesMap[dstEntity.Name] = dstEntity
+		}
+
+		// 解析关系
+		var edgeKvs map[string]*ngen.Value
+		if edgeVal.GetMVal() != nil {
+			edgeKvs = edgeVal.GetMVal().Kvs
+		}
+
+		rel := parseRelationFromMap(edgeKvs)
+		rel.SrcId = srcEntity.Name
+		rel.DstId = dstEntity.Name
+		relations = append(relations, rel)
+	}
+
+	entities := make([]types.Entity, 0, len(entitiesMap))
+	for _, e := range entitiesMap {
+		entities = append(entities, e)
+	}
+
+	return entities, relations, nil
+}
+
+// SearchGraphNodes 搜索图谱节点
+func (m *nebulaGraphModel) SearchGraphNodes(ctx context.Context, kbId string, query string) ([]types.Entity, error) {
+	spaceName := getSpaceName(kbId)
+
+	session, err := m.pool.GetSession(m.username, m.password)
+	if err != nil {
+		return nil, fmt.Errorf("get session failed: %w", err)
+	}
+	defer session.Release()
+
+	// 切换 Space
+	if _, err := session.Execute(fmt.Sprintf("USE %s;", spaceName)); err != nil {
+		return nil, fmt.Errorf("use space failed: %w", err)
+	}
+
+	// 模糊查询: MATCH (v:entity) WHERE v.entity.name CONTAINS "query" RETURN properties(v)
+	// 模糊查询: MATCH (v:entity) WHERE v.entity.name CONTAINS "query" RETURN properties(v)
+	ngql := fmt.Sprintf("MATCH (v:entity) WHERE v.entity.name CONTAINS \"%s\" RETURN properties(v) AS node LIMIT 20;", escapeString(query))
+
+	resultSet, err := session.Execute(ngql)
+	if err != nil {
+		return nil, fmt.Errorf("execute ngql failed: %w", err)
+	}
+	if !resultSet.IsSucceed() {
+		return nil, fmt.Errorf("search nodes failed: %s", resultSet.GetErrorMsg())
+	}
+
+	entities := make([]types.Entity, 0)
+	rows := resultSet.GetRows()
+	for _, row := range rows {
+		if len(row.Values) < 1 {
+			continue
+		}
+		val := row.Values[0]
+		var kvs map[string]*ngen.Value
+		if val.GetMVal() != nil {
+			kvs = val.GetMVal().Kvs
+		}
+		entity := parseEntityFromMap(kvs)
+		if entity.Name != "" {
+			entities = append(entities, entity)
+		}
+	}
+
+	return entities, nil
+}
+
+func parseEntityFromMap(m map[string]*ngen.Value) types.Entity {
+	e := types.Entity{}
+	if m == nil {
+		return e
+	}
+	// Thrift 生成的 map key 是 string (因为属性名是 string)
+	if val, ok := m["name"]; ok && len(val.SVal) > 0 {
+		e.Name = string(val.SVal)
+	}
+	if val, ok := m["type"]; ok && len(val.SVal) > 0 {
+		e.Type = string(val.SVal)
+	}
+	if val, ok := m["description"]; ok && len(val.SVal) > 0 {
+		e.Description = string(val.SVal)
+	}
+	if val, ok := m["source_ids"]; ok && len(val.SVal) > 0 {
+		// 分割逗号
+		e.SourceId = strings.Split(string(val.SVal), ",")
+	}
+	return e
+}
+
+func parseRelationFromMap(m map[string]*ngen.Value) types.Relation {
+	r := types.Relation{}
+	if m == nil {
+		return r
+	}
+	if val, ok := m["description"]; ok && len(val.SVal) > 0 {
+		r.Description = string(val.SVal)
+	}
+	if val, ok := m["weight"]; ok {
+		if val.FVal != nil {
+			r.Weight = *val.FVal
+		} else if val.IVal != nil {
+			r.Weight = float64(*val.IVal)
+		}
+	}
+	if val, ok := m["source_ids"]; ok && len(val.SVal) > 0 {
+		r.SourceId = strings.Split(string(val.SVal), ",")
+	}
+	return r
 }
 
 // escapeVid 转义 VID 中的特殊字符

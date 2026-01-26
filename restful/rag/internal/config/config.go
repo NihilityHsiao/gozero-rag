@@ -28,4 +28,11 @@ type Config struct {
 	}
 	VectorStore   commonconf.VectorStoreConf
 	ElasticSearch commonconf.ElasticSearchConf
+	Nebula        NebulaConf
+}
+
+type NebulaConf struct {
+	Addresses []string
+	Username  string
+	Password  string
 }

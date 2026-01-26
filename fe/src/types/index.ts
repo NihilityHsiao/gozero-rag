@@ -302,3 +302,4 @@ export interface ProcessFilesResp {
 
 // LLM 相关类型
 export * from './llm';
+export * from './graph';

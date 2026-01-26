@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	chat "gozero-rag/restful/rag/internal/handler/chat"
+	graph "gozero-rag/restful/rag/internal/handler/graph"
 	knowledge_base "gozero-rag/restful/rag/internal/handler/knowledge_base"
 	knowledge_document "gozero-rag/restful/rag/internal/handler/knowledge_document"
 	llm_factories "gozero-rag/restful/rag/internal/handler/llm_factories"
@@ -70,6 +71,25 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/v1"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				// 获取知识图谱数据
+				Method:  http.MethodGet,
+				Path:    "/:kb_id/graph",
+				Handler: graph.GetKnowledgeGraphHandler(serverCtx),
+			},
+			{
+				// 搜索图谱节点
+				Method:  http.MethodGet,
+				Path:    "/:kb_id/graph/search",
+				Handler: graph.SearchKnowledgeGraphHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/v1/knowledge"),
 	)
 
 	server.AddRoutes(

@@ -1,0 +1,47 @@
+type (
+    GraphNode {
+        Id          string   `json:"id"`
+        Name        string   `json:"name"`
+        Type        string   `json:"type"`
+        Description string   `json:"description"`
+        Val         int      `json:"val"`
+        SourceId    []string `json:"source_id"`
+    }
+
+    GraphLink {
+        Source      string  `json:"source"`
+        Target      string  `json:"target"`
+        Description string  `json:"description"`
+        Weight      float64 `json:"weight"`
+    }
+
+    GraphDetailResp {
+        Nodes []GraphNode `json:"nodes"`
+        Links []GraphLink `json:"links"`
+    }
+    
+    GraphReq {
+        KbId string `path:"kb_id"`
+        Limit int `form:"limit,optional,default=500"`
+    }
+    GraphSearchReq {
+        KbId string `path:"kb_id"`
+        Query string `form:"q"`
+    }
+)
+
+@server(
+    jwt: Auth
+    tags: "Knowledge Graph"
+    prefix: /v1/knowledge
+    group: graph
+)
+service rag {
+    @doc "获取知识图谱数据"
+    @handler GetKnowledgeGraph
+    get /:kb_id/graph (GraphReq) returns (GraphDetailResp)
+
+    @doc "搜索图谱节点"
+    @handler SearchKnowledgeGraph
+    get /:kb_id/graph/search (GraphSearchReq) returns (GraphDetailResp)
+}

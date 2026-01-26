@@ -239,6 +239,37 @@ type GetUserModelResp struct {
 	List  []UserApiInfo `json:"list"`
 }
 
+type GraphDetailResp struct {
+	Nodes []GraphNode `json:"nodes"`
+	Links []GraphLink `json:"links"`
+}
+
+type GraphLink struct {
+	Source      string  `json:"source"`
+	Target      string  `json:"target"`
+	Description string  `json:"description"`
+	Weight      float64 `json:"weight"`
+}
+
+type GraphNode struct {
+	Id          string   `json:"id"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Description string   `json:"description"`
+	Val         int      `json:"val"`
+	SourceId    []string `json:"source_id"`
+}
+
+type GraphReq struct {
+	KbId  string `path:"kb_id"`
+	Limit int    `form:"limit,optional,default=500"`
+}
+
+type GraphSearchReq struct {
+	KbId  string `path:"kb_id"`
+	Query string `form:"q"`
+}
+
 type HistoryMessage struct {
 	Id            string               `json:"id"`
 	Role          string               `json:"role"` // user, assistant

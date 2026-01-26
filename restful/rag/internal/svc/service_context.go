@@ -8,6 +8,7 @@ import (
 	"gozero-rag/internal/model/chat_conversation"
 	"gozero-rag/internal/model/chat_message"
 	"gozero-rag/internal/model/chunk"
+	"gozero-rag/internal/model/graph"
 	"gozero-rag/internal/model/knowledge_base"
 	"gozero-rag/internal/model/knowledge_document"
 	"gozero-rag/internal/model/knowledge_retrieval_log"
@@ -52,8 +53,12 @@ type ServiceContext struct {
 	ChatMessageModel      chat_message.ChatMessageModel
 
 	// LLM 厂商和租户 LLM 配置
+	// LLM 厂商和租户 LLM 配置
 	LlmFactoriesModel llm_factories.LlmFactoriesModel
 	TenantLlmModel    tenant_llm.TenantLlmModel
+
+	// Nebula Graph
+	NebulaGraphModel graph.NebulaGraphModel
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -92,6 +97,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(err)
 	}
 
+	// Init Nebula Graph Model
+	nebulaGraphModel, err := graph.NewNebulaGraphModel(c.Nebula.Addresses, c.Nebula.Username, c.Nebula.Password)
+	if err != nil {
+		logx.Errorf("NewNebulaGraphModel failed: %v", err)
+		panic(err)
+	}
+
 	return &ServiceContext{
 		Config: c,
 
@@ -117,5 +129,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// LLM 厂商和租户 LLM 配置
 		LlmFactoriesModel: llm_factories.NewLlmFactoriesModel(sqlConn, c.Cache),
 		TenantLlmModel:    tenant_llm.NewTenantLlmModel(sqlConn, c.Cache),
+
+		NebulaGraphModel: nebulaGraphModel,
 	}
 }
