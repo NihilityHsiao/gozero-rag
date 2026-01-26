@@ -124,6 +124,8 @@ go run main.go
 - **生成 API 文档**: `make gen-doc`
 
 ## 📸 运行截图
+![知识图谱](images/image-kg.png)
+![知识图谱2](images/image-kg2.png)
 ![alt text](images/image.png)
 ![alt text](images/image-1.png)
 ![alt text](images/image-2.png)
