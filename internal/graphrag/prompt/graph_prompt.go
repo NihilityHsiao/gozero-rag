@@ -2,9 +2,10 @@ package prompt
 
 import (
 	"context"
+	"strings"
+
 	einoprompt "github.com/cloudwego/eino/components/prompt"
 	"github.com/cloudwego/eino/schema"
-	"strings"
 )
 
 func NewGraphPrompt(inputText string) ([]*schema.Message, error) {
@@ -25,16 +26,16 @@ Given a text document that is potentially relevant to this activity and a list o
 
 -Steps-
 1. Identify all entities. For each identified entity, extract the following information:
-- entity_name: Name of the entity, capitalized, in language of 'Text'
+- entity_name: Name of the entity, capitalized, in Chinese
 - entity_type: One of the following types: [{entity_types}]
-- entity_description: Comprehensive description of the entity's attributes and activities in language of 'Text'
+- entity_description: Comprehensive description of the entity's attributes and activities in Chinese
 Format each entity as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>
 
 2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly related* to each other.
 For each pair of related entities, extract the following information:
 - source_entity: name of the source entity, as identified in step 1
 - target_entity: name of the target entity, as identified in step 1
-- relationship_description: explanation as to why you think the source entity and the target entity are related to each other in language of 'Text'
+- relationship_description: explanation as to why you think the source entity and the target entity are related to each other in Chinese
 - relationship_strength: a numeric score indicating strength of the relationship between the source entity and target entity
  Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>)
 
