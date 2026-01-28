@@ -105,7 +105,7 @@ export default function SelectKnowledgeDialog({
                                         >
                                             <Checkbox
                                                 checked={selectedIds.includes(item.id)}
-                                                onCheckedChange={() => handleToggle(item.id)}
+                                                className="pointer-events-none"
                                             />
                                             <div className="flex-1 space-y-1">
                                                 <div className="flex items-center gap-2">

@@ -12,19 +12,19 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAuthStore } from '@/store/useAuthStore';
+
 import { useChatStore } from '@/store/useChatStore';
-import { getUserApiList } from '@/api/user_model';
-import type { UserApiInfo, KnowledgeBaseInfo } from '@/types';
+import { listTenantLlm } from '@/api/llm';
+import type { TenantLlmInfo, KnowledgeBaseInfo } from '@/types';
 import SelectKnowledgeDialog from './SelectKnowledgeDialog';
 
 export default function ConfigPanel() {
-    const { userInfo } = useAuthStore();
+    // const { userInfo } = useAuthStore();
     const { config, setConfig } = useChatStore();
 
     // Local state for UI display (e.g., lists), but core config comes from store
-    const [models, setModels] = useState<UserApiInfo[]>([]);
-    const [rerankModels, setRerankModels] = useState<UserApiInfo[]>([]);
+    const [models, setModels] = useState<TenantLlmInfo[]>([]);
+    const [rerankModels, setRerankModels] = useState<TenantLlmInfo[]>([]);
 
     // Knowledge Selection State
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -48,18 +48,18 @@ export default function ConfigPanel() {
     // Fetch Models (Chat + Rerank)
     useEffect(() => {
         const fetchModels = async () => {
-            if (!userInfo?.user_id) return;
+            // Tenant LLM doesn't need user_id typically if using token, but depends on API
             try {
                 // Fetch Chat Models
-                const chatRes = await getUserApiList(userInfo.user_id, { model_type: 'chat' });
+                const chatRes = await listTenantLlm({ model_type: 'chat', page_size: 100 });
                 setModels(chatRes.list || []);
                 if (chatRes.list?.length > 0 && !config.model_id) {
-                    const defaultModel = chatRes.list.find(m => m.is_default === 1);
-                    setConfig({ model_id: defaultModel ? defaultModel.id : chatRes.list[0].id });
+                    // Default to the first one if not set
+                    setConfig({ model_id: chatRes.list[0].id });
                 }
 
                 // Fetch Rerank Models
-                const rerankRes = await getUserApiList(userInfo.user_id, { model_type: 'rerank' });
+                const rerankRes = await listTenantLlm({ model_type: 'rerank', page_size: 100 });
                 setRerankModels(rerankRes.list || []);
                 if (rerankRes.list?.length > 0 && !config.rerank_model_id) {
                     setConfig({ rerank_model_id: rerankRes.list[0].id });
@@ -69,7 +69,7 @@ export default function ConfigPanel() {
             }
         };
         fetchModels();
-    }, [userInfo?.user_id]);
+    }, []);
 
     const handleConfirmKnowledge = (kbs: KnowledgeBaseInfo[]) => {
         setSelectedKnowledgeList(kbs);
@@ -106,7 +106,7 @@ export default function ConfigPanel() {
                                     <SelectItem key={m.id} value={m.id.toString()}>
                                         <div className="flex items-center gap-2">
                                             <Box className="w-4 h-4 text-blue-500" />
-                                            <span>{m.config_name}</span>
+                                            <span>{m.llm_name} <span className="text-gray-400 text-xs">({m.llm_factory})</span></span>
                                         </div>
                                     </SelectItem>
                                 ))}
@@ -299,7 +299,7 @@ export default function ConfigPanel() {
                                                 <SelectContent>
                                                     {rerankModels.map(m => (
                                                         <SelectItem key={m.id} value={m.id.toString()}>
-                                                            {m.config_name}
+                                                            {m.llm_name}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
