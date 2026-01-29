@@ -54,13 +54,14 @@ type ChatReq struct {
 }
 
 type ChatResp struct {
-	MsgId         string               `json:"msg_id"` // 消息id
-	Type          string               `json:"type"`
-	Content       string               `json:"content,optional"`
-	RetrievalDocs []ChatRetrievalChunk `json:"retrieval_docs,optional"`
-	TokenUsage    int                  `json:"token_usage,optional"`
-	FinishReason  string               `json:"finish_reason,optional"`
-	ErrorMsg      string               `json:"error_msg,optional"`
+	MsgId            string               `json:"msg_id"` // 消息id
+	Type             string               `json:"type"`
+	Content          string               `json:"content,optional"`
+	ReasoningContent string               `json:"reasoning_content,optional"`
+	RetrievalDocs    []ChatRetrievalChunk `json:"retrieval_docs,optional"`
+	TokenUsage       int                  `json:"token_usage,optional"`
+	FinishReason     string               `json:"finish_reason,optional"`
+	ErrorMsg         string               `json:"error_msg,optional"`
 }
 
 type ChatRetrievalChunk struct {
@@ -271,13 +272,15 @@ type GraphSearchReq struct {
 }
 
 type HistoryMessage struct {
-	Id            string               `json:"id"`
-	Role          string               `json:"role"` // user, assistant
-	Content       string               `json:"content"`
-	Type          string               `json:"type"` // text
-	TokenCount    int                  `json:"token_count"`
-	CreatedAt     string               `json:"created_at"`
-	RetrievalDocs []ChatRetrievalChunk `json:"retrieval_docs,optional"`
+	Id               string               `json:"id"`
+	Role             string               `json:"role"` // user, assistant
+	Content          string               `json:"content"`
+	ReasoningContent string               `json:"reasoning_content,optional"`
+	ToolCallId       string               `json:"tool_call_id,optional"`
+	Type             string               `json:"type"` // text
+	TokenCount       int                  `json:"token_count"`
+	CreatedAt        string               `json:"created_at"`
+	RetrievalDocs    []ChatRetrievalChunk `json:"retrieval_docs,optional"`
 }
 
 type HybridStrategy struct {
