@@ -41,13 +41,15 @@ type (
 	}
 
 	ChatConversation struct {
-		Id           string    `db:"id"`            // 会话ID (UUID)
-		UserId       string    `db:"user_id"`       // 用户ID (UUID)
-		Title        string    `db:"title"`         // 会话标题
-		Status       int64     `db:"status"`        // 状态: 1-正常, 2-归档, 3-删除
-		MessageCount int64     `db:"message_count"` // 消息数量
-		CreatedAt    time.Time `db:"created_at"`    // 创建时间
-		UpdatedAt    time.Time `db:"updated_at"`    // 更新时间
+		Id           string         `db:"id"`            // 会话ID (UUID)
+		UserId       string         `db:"user_id"`       // 用户ID (UUID)
+		TenantId     string         `db:"tenant_id"`     // 租户ID (UUID)
+		Title        string         `db:"title"`         // 会话标题
+		Status       int64          `db:"status"`        // 状态: 1-正常, 2-归档, 3-删除
+		Config       sql.NullString `db:"config"`        // 对话配置: llm_id, system_prompt, etc.
+		MessageCount int64          `db:"message_count"` // 消息数量
+		CreatedAt    time.Time      `db:"created_at"`    // 创建时间
+		UpdatedAt    time.Time      `db:"updated_at"`    // 更新时间
 	}
 )
 
@@ -87,8 +89,8 @@ func (m *defaultChatConversationModel) FindOne(ctx context.Context, id string) (
 func (m *defaultChatConversationModel) Insert(ctx context.Context, data *ChatConversation) (sql.Result, error) {
 	chatConversationIdKey := fmt.Sprintf("%s%v", cacheChatConversationIdPrefix, data.Id)
 	ret, err := m.ExecCtx(ctx, func(ctx context.Context, conn sqlx.SqlConn) (result sql.Result, err error) {
-		query := fmt.Sprintf("insert into %s (%s) values (?, ?, ?, ?, ?)", m.table, chatConversationRowsExpectAutoSet)
-		return conn.ExecCtx(ctx, query, data.Id, data.UserId, data.Title, data.Status, data.MessageCount)
+		query := fmt.Sprintf("insert into %s (%s) values (?, ?, ?, ?, ?, ?, ?)", m.table, chatConversationRowsExpectAutoSet)
+		return conn.ExecCtx(ctx, query, data.Id, data.UserId, data.TenantId, data.Title, data.Status, data.Config, data.MessageCount)
 	}, chatConversationIdKey)
 	return ret, err
 }
@@ -97,7 +99,7 @@ func (m *defaultChatConversationModel) Update(ctx context.Context, data *ChatCon
 	chatConversationIdKey := fmt.Sprintf("%s%v", cacheChatConversationIdPrefix, data.Id)
 	_, err := m.ExecCtx(ctx, func(ctx context.Context, conn sqlx.SqlConn) (result sql.Result, err error) {
 		query := fmt.Sprintf("update %s set %s where `id` = ?", m.table, chatConversationRowsWithPlaceHolder)
-		return conn.ExecCtx(ctx, query, data.UserId, data.Title, data.Status, data.MessageCount, data.Id)
+		return conn.ExecCtx(ctx, query, data.UserId, data.TenantId, data.Title, data.Status, data.Config, data.MessageCount, data.Id)
 	}, chatConversationIdKey)
 	return err
 }

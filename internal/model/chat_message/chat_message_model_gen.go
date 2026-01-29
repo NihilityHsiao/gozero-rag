@@ -37,17 +37,19 @@ type (
 	}
 
 	ChatMessage struct {
-		Id             string         `db:"id"`              // 消息ID (UUID)
-		ConversationId string         `db:"conversation_id"` // 所属会话ID
-		SeqId          int64          `db:"seq_id"`          // 消息序号 (用于严格排序)
-		Role           string         `db:"role"`            // 角色: user, assistant, system, tool
-		Content        string         `db:"content"`         // 消息内容
-		Type           string         `db:"type"`            // 内容类型: text, json (for tool calls)
-		TokenCount     int64          `db:"token_count"`     // Token数量估算
-		ExpertMode     int64          `db:"expert_mode"`     // 是否专家模式/深度思考模式
-		ModelConfig    sql.NullString `db:"model_config"`    // 当前消息使用的模型配置(Snapshot): model_id, knowledge_base_ids, etc.
-		Extra          sql.NullString `db:"extra"`           // 扩展信息: 引用源(citations), 思考过程(reasoning), 耗时等
-		CreatedAt      time.Time      `db:"created_at"`      // 创建时间
+		Id               string         `db:"id"`                // 消息ID (UUID)
+		ConversationId   string         `db:"conversation_id"`   // 所属会话ID
+		SeqId            int64          `db:"seq_id"`            // 消息序号 (用于严格排序)
+		Role             string         `db:"role"`              // 角色: user, assistant, system, tool
+		Content          string         `db:"content"`           // 消息内容
+		ReasoningContent sql.NullString `db:"reasoning_content"` // 深度思考内容 (CoT)
+		Type             string         `db:"type"`              // 内容类型: text, json (for tool calls)
+		TokenCount       int64          `db:"token_count"`       // Token数量估算
+		ToolCallId       sql.NullString `db:"tool_call_id"`      // 工具调用ID
+		ExpertMode       int64          `db:"expert_mode"`       // 是否专家模式/深度思考模式
+		ModelConfig      sql.NullString `db:"model_config"`      // 当前消息使用的模型配置(Snapshot): model_id, knowledge_base_ids, etc.
+		Extra            sql.NullString `db:"extra"`             // 扩展信息: 引用源(citations), 思考过程(reasoning), 耗时等
+		CreatedAt        time.Time      `db:"created_at"`        // 创建时间
 	}
 )
 
@@ -79,14 +81,14 @@ func (m *defaultChatMessageModel) FindOne(ctx context.Context, id string) (*Chat
 }
 
 func (m *defaultChatMessageModel) Insert(ctx context.Context, data *ChatMessage) (sql.Result, error) {
-	query := fmt.Sprintf("insert into %s (%s) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", m.table, chatMessageRowsExpectAutoSet)
-	ret, err := m.conn.ExecCtx(ctx, query, data.Id, data.ConversationId, data.SeqId, data.Role, data.Content, data.Type, data.TokenCount, data.ExpertMode, data.ModelConfig, data.Extra)
+	query := fmt.Sprintf("insert into %s (%s) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", m.table, chatMessageRowsExpectAutoSet)
+	ret, err := m.conn.ExecCtx(ctx, query, data.Id, data.ConversationId, data.SeqId, data.Role, data.Content, data.ReasoningContent, data.Type, data.TokenCount, data.ToolCallId, data.ExpertMode, data.ModelConfig, data.Extra)
 	return ret, err
 }
 
 func (m *defaultChatMessageModel) Update(ctx context.Context, data *ChatMessage) error {
 	query := fmt.Sprintf("update %s set %s where `id` = ?", m.table, chatMessageRowsWithPlaceHolder)
-	_, err := m.conn.ExecCtx(ctx, query, data.ConversationId, data.SeqId, data.Role, data.Content, data.Type, data.TokenCount, data.ExpertMode, data.ModelConfig, data.Extra, data.Id)
+	_, err := m.conn.ExecCtx(ctx, query, data.ConversationId, data.SeqId, data.Role, data.Content, data.ReasoningContent, data.Type, data.TokenCount, data.ToolCallId, data.ExpertMode, data.ModelConfig, data.Extra, data.Id)
 	return err
 }
 
