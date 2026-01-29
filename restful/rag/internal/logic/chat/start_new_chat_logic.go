@@ -5,12 +5,13 @@ package chat
 
 import (
 	"context"
-	"github.com/zeromicro/go-zero/core/logx"
 	"gozero-rag/internal/model/chat_conversation"
 	"gozero-rag/internal/xerr"
 	"gozero-rag/restful/rag/internal/common"
 	"gozero-rag/restful/rag/internal/svc"
 	"gozero-rag/restful/rag/internal/types"
+
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/google/uuid"
 )
@@ -34,6 +35,11 @@ func (l *StartNewChatLogic) StartNewChat(req *types.StartNewChatReq) (resp *type
 		return nil, err
 	}
 
+	tenantId, err := common.GetTenantIdFromCtx(l.ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// 1. Generate new UUID (v7)
 	conversationIdObj, err := uuid.NewV7()
 	if err != nil {
@@ -45,6 +51,7 @@ func (l *StartNewChatLogic) StartNewChat(req *types.StartNewChatReq) (resp *type
 	newConversation := &chat_conversation.ChatConversation{
 		Id:           conversationId,
 		UserId:       userId,
+		TenantId:     tenantId,
 		Title:        "New Conversation",
 		Status:       1, // Normal
 		MessageCount: 0,
