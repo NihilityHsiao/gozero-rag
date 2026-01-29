@@ -3,7 +3,7 @@ import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
 import SpriteText from 'three-spritetext';
 import { Loader2 } from 'lucide-react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { getKnowledgeGraph, searchKnowledgeGraph } from '@/api/knowledge';
@@ -29,7 +29,6 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function KnowledgeGraph() {
     const { id: kbId } = useParams();
-    const navigate = useNavigate();
     const fgRef = useRef<any>(undefined);
 
     // State
@@ -294,8 +293,25 @@ export default function KnowledgeGraph() {
         if (fgRef.current) fgRef.current.zoomToFit(1000, 50);
     };
 
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                setDimensions({ width, height });
+            }
+        });
+
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, []);
+
     return (
-        <div className="relative w-full h-[calc(100vh-64px)] overflow-hidden bg-black">
+        <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-black">
             {/* Deep Space Background Gradient */}
             <div
                 className="absolute inset-0 pointer-events-none z-0"
@@ -361,36 +377,40 @@ export default function KnowledgeGraph() {
             />
 
             {/* 3D Force Graph */}
-            <ForceGraph3D
-                ref={fgRef}
-                graphData={data}
-                nodeLabel="name"
-                nodeThreeObject={nodeThreeObject}
-                onNodeClick={handleNodeClick}
-                onNodeHover={handleNodeHover}
-                backgroundColor="rgba(0,0,0,0)"
-                showNavInfo={false}
-                linkColor={link => {
-                    // @ts-ignore
-                    const idStr = `${link.source.id}-${link.target.id}`;
-                    // Highlight: Bright Cyan, Normal: Faint Indigo
-                    return highlightLinks.has(idStr) ? '#22d3ee' : 'rgba(99, 102, 241, 0.15)';
-                }}
-                linkWidth={link => {
-                    // @ts-ignore
-                    const idStr = `${link.source.id}-${link.target.id}`;
-                    return highlightLinks.has(idStr) ? 2 : 0.5;
-                }}
-                linkDirectionalParticles={2}
-                linkDirectionalParticleSpeed={0.005}
-                linkDirectionalParticleWidth={link => {
-                    // @ts-ignore
-                    const idStr = `${link.source.id}-${link.target.id}`;
-                    return highlightLinks.has(idStr) ? 3 : 1;
-                }}
-                linkOpacity={0.3}
-                controlType="orbit"
-            />
+            {dimensions.width > 0 && dimensions.height > 0 && (
+                <ForceGraph3D
+                    ref={fgRef}
+                    width={dimensions.width}
+                    height={dimensions.height}
+                    graphData={data}
+                    nodeLabel="name"
+                    nodeThreeObject={nodeThreeObject}
+                    onNodeClick={handleNodeClick}
+                    onNodeHover={handleNodeHover}
+                    backgroundColor="rgba(0,0,0,0)"
+                    showNavInfo={false}
+                    linkColor={link => {
+                        // @ts-ignore
+                        const idStr = `${link.source.id}-${link.target.id}`;
+                        // Highlight: Bright Cyan, Normal: Faint Indigo
+                        return highlightLinks.has(idStr) ? '#22d3ee' : 'rgba(99, 102, 241, 0.15)';
+                    }}
+                    linkWidth={link => {
+                        // @ts-ignore
+                        const idStr = `${link.source.id}-${link.target.id}`;
+                        return highlightLinks.has(idStr) ? 2 : 0.5;
+                    }}
+                    linkDirectionalParticles={2}
+                    linkDirectionalParticleSpeed={0.005}
+                    linkDirectionalParticleWidth={link => {
+                        // @ts-ignore
+                        const idStr = `${link.source.id}-${link.target.id}`;
+                        return highlightLinks.has(idStr) ? 3 : 1;
+                    }}
+                    linkOpacity={0.3}
+                    controlType="orbit"
+                />
+            )}
         </div>
     );
 }

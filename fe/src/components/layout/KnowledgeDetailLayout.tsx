@@ -92,11 +92,18 @@ export default function KnowledgeDetailLayout() {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-auto p-8">
-          <div className="max-w-6xl mx-auto">
+        {/* Page Content */}
+        {location.pathname.includes('/graph') ? (
+          <div className="flex-1 overflow-hidden relative">
             <Outlet />
           </div>
-        </div>
+        ) : (
+          <div className="flex-1 overflow-auto p-8">
+            <div className="max-w-6xl mx-auto">
+              <Outlet />
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

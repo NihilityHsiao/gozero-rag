@@ -51,7 +51,7 @@ export default function ConfigPanel() {
             // Tenant LLM doesn't need user_id typically if using token, but depends on API
             try {
                 // Fetch Chat Models
-                const chatRes = await listTenantLlm({ model_type: 'chat', page_size: 100 });
+                const chatRes = await listTenantLlm({ model_type: 'LLM', page_size: 100 });
                 setModels(chatRes.list || []);
                 if (chatRes.list?.length > 0 && !config.model_id) {
                     // Default to the first one if not set
@@ -59,7 +59,7 @@ export default function ConfigPanel() {
                 }
 
                 // Fetch Rerank Models
-                const rerankRes = await listTenantLlm({ model_type: 'rerank', page_size: 100 });
+                const rerankRes = await listTenantLlm({ model_type: 'Rerank', page_size: 100 });
                 setRerankModels(rerankRes.list || []);
                 if (rerankRes.list?.length > 0 && !config.rerank_model_id) {
                     setConfig({ rerank_model_id: rerankRes.list[0].id });
@@ -83,7 +83,7 @@ export default function ConfigPanel() {
     };
 
     return (
-        <div className="w-[300px] border-l bg-gray-50/50 flex flex-col h-full">
+        <div className="w-[300px] shrink-0 border-l bg-gray-50/50 flex flex-col h-full">
             <div className="p-4 border-b bg-white flex items-center gap-2">
                 <Settings2 className="w-4 h-4 text-gray-500" />
                 <h3 className="font-semibold text-sm">编排配置</h3>
