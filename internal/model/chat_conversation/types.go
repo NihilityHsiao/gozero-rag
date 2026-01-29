@@ -27,11 +27,11 @@ type RetrievalConfig struct {
 }
 
 func (m *ChatConversation) GetConfig() (*ConversationConfig, error) {
-	if len(m.Config) == 0 {
+	if m.Config.String == "" {
 		return &ConversationConfig{}, nil
 	}
 	var cfg ConversationConfig
-	err := json.Unmarshal([]byte(m.Config), &cfg)
+	err := json.Unmarshal([]byte(m.Config.String), &cfg)
 	if err != nil {
 		return nil, err
 	}
