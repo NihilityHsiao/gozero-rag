@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/zeromicro/go-zero/core/logc"
-	"github.com/zeromicro/go-zero/core/threading"
-	"github.com/zeromicro/go-zero/rest/httpx"
 	"gozero-rag/restful/rag/internal/logic/chat"
 	"gozero-rag/restful/rag/internal/svc"
 	"gozero-rag/restful/rag/internal/types"
+
+	"github.com/zeromicro/go-zero/core/logc"
+	"github.com/zeromicro/go-zero/core/threading"
+	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
 // sse对话
@@ -49,6 +50,21 @@ func ChatHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 				if !ok {
 					return
 				}
+				if data.Type != "" && data.Type != "text" {
+					if _, err := fmt.Fprintf(w, "event: %s\n", data.Type); err != nil {
+						logc.Errorw(r.Context(), "ChatHandler: failed into write event type", logc.Field("error", err))
+						return
+					}
+				} else if data.Type == "text" {
+					// 显式把 text 类型映射为 standard message event (optional, but good for clarity)
+					// Or just omit event: for text to use default 'message' event.
+					// The plan says: event: message for text.
+					if _, err := fmt.Fprintf(w, "event: message\n"); err != nil {
+						logc.Errorw(r.Context(), "ChatHandler: failed into write event type", logc.Field("error", err))
+						return
+					}
+				}
+
 				output, err := json.Marshal(data)
 				if err != nil {
 					logc.Errorw(r.Context(), "ChatHandler", logc.Field("error", err))
