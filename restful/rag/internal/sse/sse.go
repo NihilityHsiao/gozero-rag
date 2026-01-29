@@ -5,10 +5,12 @@ import "gozero-rag/restful/rag/internal/types"
 type SseType = string
 
 const (
-	SSETypeText     = "text"
-	SSETypeCitation = "citation"
-	SSETypeFinish   = "finish"
-	SSETypeError    = "error"
+	SSETypeText      = "text"
+	SSETypeReasoning = "reasoning"
+	SSETypeToolUse   = "tool_use"
+	SSETypeCitation  = "citation"
+	SSETypeFinish    = "finish"
+	SSETypeError     = "error"
 )
 
 type SseClient struct {
@@ -31,6 +33,14 @@ func (s *SseClient) SendText(text string) {
 	}
 }
 
+func (s *SseClient) SendReasoning(content string) {
+	s.client <- &types.ChatResp{
+		Type:             SSETypeReasoning,
+		MsgId:            s.msgId,
+		ReasoningContent: content,
+	}
+}
+
 func (s *SseClient) SendFinish() {
 	s.client <- &types.ChatResp{
 		Type:  SSETypeFinish,
@@ -43,5 +53,13 @@ func (s *SseClient) SendError(errMsg string) {
 		MsgId:    s.msgId,
 		Type:     SSETypeError,
 		ErrorMsg: errMsg,
+	}
+}
+
+func (s *SseClient) SendCitation(chunks []types.ChatRetrievalChunk) {
+	s.client <- &types.ChatResp{
+		Type:          SSETypeCitation,
+		MsgId:         s.msgId,
+		RetrievalDocs: chunks,
 	}
 }
