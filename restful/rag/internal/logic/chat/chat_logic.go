@@ -2,8 +2,10 @@ package chat
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"gozero-rag/internal/model/chat_conversation"
+	"gozero-rag/internal/model/chat_message"
 	"gozero-rag/internal/rag_core/retriever"
 	"gozero-rag/internal/xerr"
 	sse2 "gozero-rag/restful/rag/internal/sse"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/schema"
+	"github.com/google/uuid"
 
 	"gozero-rag/restful/rag/internal/svc"
 	"gozero-rag/restful/rag/internal/types"
@@ -91,15 +94,14 @@ func (l *ChatLogic) findEmbeddingConfigByIds(knowledgeBaseIds []string) (map[str
 }
 
 func (l *ChatLogic) Chat(req *types.ChatReq, client chan<- *types.ChatResp) (err error) {
-	// todo: add your logic here and delete this line
-	// Note: msgId should ideally be generated or passed.
-	msgId := fmt.Sprintf("id-%v", time.Now().UnixMilli())
-	sse := sse2.NewSSEClient(msgId, client)
+	// msgId will be used for both User and Assistant message correlation in frontend if needed,
+	// but strictly DB has its own IDs. Here we generate a temporary ID for the stream.
+	streamMsgId := fmt.Sprintf("msg-%v", time.Now().UnixMilli())
+	sse := sse2.NewSSEClient(streamMsgId, client)
 
 	failTask := func(info string) error {
-		sse.SendError("任务执行失败")
-		logx.Errorf("chat err:%v, info:%s", err, info)
 		sse.SendError(info)
+		logx.Errorf("chat err:%v, info:%s", err, info)
 		return err
 	}
 
@@ -108,25 +110,148 @@ func (l *ChatLogic) Chat(req *types.ChatReq, client chan<- *types.ChatResp) (err
 		return failTask("获取会话失败")
 	}
 
-	// 首次提问, 用第一个问题作为会话标题
+	// 1. Initial Title Setting
 	if conv.MessageCount == 0 {
 		_ = l.setConversationTitle(conv, req.Message)
 	}
 
+	// 2. Save User Message
+	userSeqId, err := l.getNextSeqId(req.ConversationId)
+	if err != nil {
+		logx.Errorf("failed to get seq_id: %v", err)
+		return failTask("系统错误")
+	}
+
+	if err := l.saveMessage(req.ConversationId, userSeqId, "user", req.Message, "", ""); err != nil {
+		logx.Errorf("failed to save user message: %v", err)
+		return failTask("保存消息失败")
+	}
+
+	// Update conversation message count (async or here)
+	// For simplicity, we skip updating message_count in conversation strictly here or do it later.
+
+	// 3. Retrieval
 	docs, err := l.retrieve(req)
+	if err != nil {
+		return failTask("检索失败")
+	}
 
-	// Just sending retrieval content for now? The original code did this.
-	// Real chat logic needs LLM generation. But here we just stream docs?
-	// The standard RAG flow: Retrieve -> Generate.
-	// The original code only streamed docs. I will preserve that behavior for now.
-
+	// 4. Stream Retrieval Results (Citations)
+	// In the new design, we might want to send "citation" event.
+	// But legacy logic sent text. Let's send Citation event if possible, or Text as before?
+	// The implementation plan says "Refactor ChatLogic for SSE... Events: message, reasoning, citation".
+	// So let's try to construct citation event.
+	// However, types.ChatRetrievalChunk matches API.
+	retrievalChunks := make([]types.ChatRetrievalChunk, 0)
 	for _, doc := range docs {
-		sse.SendText(doc.Content + "\n\n") // Append newline for separation
+		chunk := types.ChatRetrievalChunk{
+			ChunkID: doc.ID,
+			DocID:   "", // chunks often don't have doc_id in schema.Document if not put there.
+			Content: doc.Content,
+			Score:   doc.Score(),
+		}
+		// Try to extract metadata if available
+		if docId, ok := doc.MetaData["doc_id"].(string); ok {
+			chunk.DocID = docId
+		}
+		if docName, ok := doc.MetaData["doc_name"].(string); ok {
+			chunk.DocName = docName
+		}
+		retrievalChunks = append(retrievalChunks, chunk)
+	}
+
+	if len(retrievalChunks) > 0 {
+		sse.SendCitation(retrievalChunks)
+	}
+
+	// 5. Mock Reasoning (DeepSeek R1 Style)
+	// In a real implementation, this comes from the LLM stream.
+	sse.SendReasoning("正在分析用户提问...\n")
+	time.Sleep(500 * time.Millisecond)
+	sse.SendReasoning("根据检索到的上下文，识别到关键信息...\n")
+	time.Sleep(500 * time.Millisecond)
+	sse.SendReasoning("构建回答逻辑...\n")
+
+	// 6. Mock LLM Response
+	answerConfig := "根据检索结果，"
+	sse.SendText(answerConfig)
+	time.Sleep(200 * time.Millisecond)
+	sse.SendText("这是回答的具体内容。\n")
+
+	finalContent := answerConfig + "这是回答的具体内容。\n"
+	finalReasoning := "正在分析用户提问...\n根据检索到的上下文，识别到关键信息...\n构建回答逻辑...\n"
+
+	// 7. Save Assistant Message
+	asstSeqId := userSeqId + 1
+	if err := l.saveMessage(req.ConversationId, asstSeqId, "assistant", finalContent, finalReasoning, ""); err != nil {
+		logx.Errorf("failed to save assistant message: %v", err)
 	}
 
 	sse.SendFinish()
 
 	return nil
+}
+
+func (l *ChatLogic) getNextSeqId(conversationId string) (int, error) {
+	// Basic implementation: Count + 1 or Max + 1.
+	// Query: select coalesce(max(seq_id), 0) + 1 from chat_message where conversation_id = ?
+	// Since we don't have custom query method in generated model, use FindOne/QueryRow.
+	// But `chat_message_model.go` is generated. We can use QueryRowNoCacheCtx manually using SqlConn.
+	// However, accessing SqlConn directly from logic is via l.svcCtx.ChatMessageModel... which encapsulates it.
+	// Inspect ChatMessageModel definition. It usually embeds `defaultChatMessageModel`.
+	// We might need to add `FindMaxSeqId` to the model interface or run raw query via l.svcCtx.ChatMessageModel.
+	// Since I cannot modify model interface easily without re-generating (and overwriting custom code),
+	// I might use a hacky way or just assume 0 for now if too hard? No, user asked for seq_id.
+	// I can assume MessageCount in conversation is roughly seq_id * 2?
+	// Let's use `MessageCount` from conversation as base?
+	// Conversation `MessageCount` is updated.
+	// Better: use l.svcCtx.ChatConversationModel.FindOne to get MessageCount, then +1 for user, +2 for assistant.
+	conv, err := l.svcCtx.ChatConversationModel.FindOne(l.ctx, conversationId)
+	if err != nil {
+		return 0, err
+	}
+	// Update MessageCount logic should be consistent.
+	// Let's assume current count is the last one.
+	// Optimistic locking or simple increment.
+	return int(conv.MessageCount) + 1, nil
+}
+
+func (l *ChatLogic) saveMessage(convId string, seqId int, role, content, reasoning, toolCallId string) error {
+	uuidStr, _ := uuid.NewV7()
+
+	msg := &chat_message.ChatMessage{
+		Id:             uuidStr.String(),
+		ConversationId: convId,
+		SeqId:          int64(seqId),
+		Role:           role,
+		Content:        content,
+		Type:           "text",
+		TokenCount:     0, // TODO: calculate
+	}
+
+	// Manual field assignment for new fields if not in struct yet?
+	// Wait, generated model should have them.
+	// `ReasoningContent`, `ToolCallId`.
+	msg.ReasoningContent = sql.NullString{String: reasoning, Valid: reasoning != ""}
+	msg.ToolCallId = sql.NullString{String: toolCallId, Valid: toolCallId != ""}
+
+	_, err := l.svcCtx.ChatMessageModel.Insert(l.ctx, msg)
+
+	// Also update conversation message count
+	if err == nil {
+		_ = l.incrementMessageCount(convId)
+	}
+
+	return err
+}
+
+func (l *ChatLogic) incrementMessageCount(convId string) error {
+	conv, err := l.svcCtx.ChatConversationModel.FindOne(l.ctx, convId)
+	if err != nil {
+		return err
+	}
+	conv.MessageCount += 1
+	return l.svcCtx.ChatConversationModel.Update(l.ctx, conv)
 }
 
 func (l *ChatLogic) retrieve(req *types.ChatReq) (docs []*schema.Document, err error) {

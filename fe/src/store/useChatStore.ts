@@ -30,7 +30,15 @@ export const useChatStore = create<ChatState>((set) => ({
     isStreaming: false,
     streamingContent: '',
 
-    config: {} as ChatModelConfig,
+    config: {
+        temperature: 0.7,
+        retrieval_mode: 'hybrid',
+        top_k: 10,
+        score_threshold: 0.5,
+        hybrid_strategy_type: 'weighted',
+        weight_vector: 0.7,
+        weight_keyword: 0.3
+    } as ChatModelConfig,
     setConfig: (config) => set((state) => ({ config: { ...state.config, ...config } })),
 
     setConversations: (conversations) => set({ conversations }),

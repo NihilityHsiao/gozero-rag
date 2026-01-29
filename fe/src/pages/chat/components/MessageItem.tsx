@@ -35,11 +35,33 @@ export default function MessageItem({ message }: MessageItemProps) {
                         {isUser ? 'You' : 'AI Assistant'}
                     </span>
                     {!isUser && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400" onClick={copyToClipboard}>
-                            <Copy className="w-3 h-3" />
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400" onClick={copyToClipboard}>
+                                <Copy className="w-3 h-3" />
+                            </Button>
+                        </div>
                     )}
                 </div>
+
+                {/* Reasoning Content (Thinking Process) */}
+                {message.extra?.reasoning && (
+                    <div className="mb-4">
+                        <details className="group border rounded-lg bg-gray-50 open:bg-white transition-colors">
+                            <summary className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700 select-none">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
+                                    <span>思考过程 (Reasoning)</span>
+                                </div>
+                                <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {/* Chevron icon could go here */}
+                                </span>
+                            </summary>
+                            <div className="px-3 pb-3 pt-1 text-xs text-gray-600 leading-relaxed border-t border-gray-100 whitespace-pre-wrap font-mono">
+                                {message.extra.reasoning}
+                            </div>
+                        </details>
+                    </div>
+                )}
 
                 <div className="prose prose-sm max-w-none prose-pre:bg-gray-100 prose-pre:p-0">
                     <ReactMarkdown

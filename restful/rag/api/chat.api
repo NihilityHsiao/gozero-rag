@@ -46,20 +46,23 @@ type (
     ChatResp {
         MsgId string `json:"msg_id"` // 消息id
 
-        // 消息类型: text, citation, finish, error
+        // 消息类型: text, citation, reasoning, tool_use, finish, error
         Type string `json:"type"`
 
         // 1. Text Delta (type=text)
         Content string `json:"content,optional"`
 
-        // 2. Citation (type=citation)
+        // 2. Reasoning (type=reasoning)
+        ReasoningContent string `json:"reasoning_content,optional"`
+
+        // 3. Citation (type=citation)
         RetrievalDocs []ChatRetrievalChunk `json:"retrieval_docs,optional"`
 
-        // 3. Finish (type=finish)
+        // 4. Finish (type=finish)
         TokenUsage int `json:"token_usage,optional"`
         FinishReason string `json:"finish_reason,optional"`
 
-        // 4. Error (type=error)
+        // 5. Error (type=error)
         ErrorMsg string `json:"error_msg,optional"`
     }
 
@@ -101,6 +104,11 @@ type (
         Id string `json:"id"`
         Role string `json:"role"` // user, assistant
         Content string `json:"content"` 
+        
+        // 新增字段
+        ReasoningContent string `json:"reasoning_content,optional"` 
+        ToolCallId string `json:"tool_call_id,optional"`
+
         Type string `json:"type"` // text
         TokenCount int `json:"token_count"`
         CreatedAt string `json:"created_at"`

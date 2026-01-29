@@ -94,12 +94,15 @@ export interface ChatRetrievalChunk {
 }
 
 // SSE 响应结构 (流式返回)
+// SSE 响应结构 (流式返回)
 export interface ChatResp {
     msg_id: string;
-    type: 'text' | 'citation' | 'finish' | 'error';
+    type: 'text' | 'citation' | 'reasoning' | 'tool_use' | 'finish' | 'error';
 
     // Optional Fields based on type
     content?: string;                  // type='text'
+    reasoning_content?: string;        // type='reasoning'
+    tool_call_id?: string;             // type='tool_use'
     retrieval_docs?: ChatRetrievalChunk[]; // type='citation'
     token_usage?: number;              // type='finish'
     finish_reason?: string;            // type='finish'

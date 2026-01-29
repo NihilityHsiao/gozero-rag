@@ -92,10 +92,17 @@ export default function ChatWindow() {
         });
 
         // 4. Send SSE Request
+        const chatModelId = Number(config.model_id);
+        if (!chatModelId) {
+            toast.error('请先在右侧配置面板选择模型');
+            setIsStreaming(false);
+            return;
+        }
+
         const req: ChatReq = {
             conversation_id: conversationId,
             message: text,
-            chat_model_id: Number(config.model_id) || 0,
+            chat_model_id: chatModelId,
             prompt: config.system_prompt || '',
             temperature: config.temperature || 0.7,
             knowledge_base_ids: config.knowledge_base_ids || [],
@@ -110,12 +117,18 @@ export default function ChatWindow() {
             }
         };
 
+        console.log('Sending ChatReq:', req);
+
         let accumulatedContent = '';
+        let accumulatedReasoning = '';
 
         await chatSse(req, (resp) => {
             if (resp.type === 'text' && resp.content) {
                 accumulatedContent += resp.content;
                 updateLastMessage(accumulatedContent);
+            } else if (resp.type === 'reasoning' && resp.reasoning_content) {
+                accumulatedReasoning += resp.reasoning_content;
+                updateLastMessage(accumulatedContent, { reasoning: accumulatedReasoning });
             } else if (resp.type === 'citation' && resp.retrieval_docs) {
                 updateLastMessage(accumulatedContent, { citations: resp.retrieval_docs });
             } else if (resp.type === 'error') {
