@@ -6,21 +6,27 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/zeromicro/go-zero/rest/httpx"
-	"gozero-rag/internal/response"
 
+	"github.com/joho/godotenv"
+	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/rest"
+	"github.com/zeromicro/go-zero/rest/httpx"
+
+	"gozero-rag/internal/response"
 	"gozero-rag/restful/rag/internal/config"
 	"gozero-rag/restful/rag/internal/handler"
 	"gozero-rag/restful/rag/internal/svc"
-
-	"github.com/zeromicro/go-zero/core/conf"
-	"github.com/zeromicro/go-zero/rest"
 )
 
 var configFile = flag.String("f", "etc/rag.yaml", "the config file")
 
 func main() {
 	flag.Parse()
+
+	// 加载 .env 文件 (尝试多个路径以支持不同的运行方式)
+	// GoLand 调试器可能使用项目根目录或模块目录作为工作目录
+	_ = godotenv.Load(".env")       // 项目根目录运行
+	_ = godotenv.Load("../../.env") // restful/rag 目录运行
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
