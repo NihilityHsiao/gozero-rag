@@ -25,7 +25,6 @@ ElasticSearch:
 
 Nebula:
   Addresses:
-    - ${NEBULA_ADDRESS_1}
-    - ${NEBULA_ADDRESS_2}
+    - ${NEBULA_ADDRESS}
   Username: ${NEBULA_USERNAME}
   Password: ${NEBULA_PASSWORD}
