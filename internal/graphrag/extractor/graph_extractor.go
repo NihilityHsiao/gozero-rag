@@ -192,14 +192,15 @@ func (e *GraphExtractor) parseHistory(history string, sourceId string) ([]types.
 				Description: parts[3],
 				SourceId:    []string{sourceId},
 			})
-		} else if typeTag == "relationship" && len(parts) >= 5 {
-			// ("relationship"<|>"Src"<|>"Tgt"<|>"Desc"<|>Weight)
-			// parts: [relationship, Src, Tgt, Desc, Weight]
-			weight, _ := strconv.ParseFloat(parts[4], 64)
+		} else if typeTag == "relationship" && len(parts) >= 6 {
+			// ("relationship"<|>"Src"<|>"Tgt"<|>"RelationType"<|>"Desc"<|>Weight)
+			// parts: [relationship, Src, Tgt, RelationType, Desc, Weight]
+			weight, _ := strconv.ParseFloat(parts[5], 64)
 			relations = append(relations, types.Relation{
 				SrcId:       parts[1],
 				DstId:       parts[2],
-				Description: parts[3],
+				Type:        parts[3],
+				Description: parts[4],
 				Weight:      weight,
 				SourceId:    []string{sourceId},
 			})

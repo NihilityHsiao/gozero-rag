@@ -44,9 +44,12 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 		logx.Errorf("invalid llm_id format: %s", msg.LlmId)
 		return nil
 	}
-	modelName, factory := parts[0], parts[1]
+	llmModelName, factory := parts[0], parts[1]
 
-	tenantLlm, err := l.svcCtx.TenantLlmModel.FindByTenantFactoryName(ctx, msg.TenantId, factory, modelName)
+	// get embedding config
+	//l.svcCtx.TenantLlmModel
+
+	tenantLlm, err := l.svcCtx.TenantLlmModel.FindByTenantFactoryName(ctx, msg.TenantId, factory, llmModelName)
 	if err != nil {
 		logx.Errorf("find tenant llm failed: %v", err)
 		return nil // Should we retry? For now, commit if configuration error
@@ -85,6 +88,9 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 		return err
 	}
 	logx.Infof("doc [%s] ,知识图谱提取完成", msg.DocumentId)
+
+	// 4.2 对entity做embedding
+	// 获取doc所在知识库的embedding id(模型名称@模型厂商)
 
 	// 5. Save to NebulaGraph
 	if err := l.saveToNebula(ctx, extractResult, msg.KnowledgeBaseId); err != nil {

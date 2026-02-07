@@ -6,6 +6,7 @@ import (
 	"gozero-rag/internal/graphrag/extractor"
 	"gozero-rag/internal/model/chunk"
 	"gozero-rag/internal/model/graph"
+	"gozero-rag/internal/model/knowledge_base"
 	"gozero-rag/internal/model/tenant_llm"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -13,12 +14,13 @@ import (
 )
 
 type ServiceContext struct {
-	Config           config.Config
-	TenantLlmModel   tenant_llm.TenantLlmModel
-	ChunkModel       chunk.ChunkModel
-	GraphModel       graph.GraphModel       // ES 图数据存储
-	NebulaGraphModel graph.NebulaGraphModel // Nebula 图数据存储 (新增)
-	GraphExtractor   *extractor.GraphExtractor
+	Config             config.Config
+	TenantLlmModel     tenant_llm.TenantLlmModel
+	KnowledgeBaseModel knowledge_base.KnowledgeBaseModel
+	ChunkModel         chunk.ChunkModel
+	GraphModel         graph.GraphModel       // ES 图数据存储
+	NebulaGraphModel   graph.NebulaGraphModel // Nebula 图数据存储 (新增)
+	GraphExtractor     *extractor.GraphExtractor
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -53,11 +55,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	return &ServiceContext{
-		Config:           c,
-		TenantLlmModel:   tenant_llm.NewTenantLlmModel(sqlConn, c.Cache),
-		ChunkModel:       chunkModel,
-		GraphModel:       graphModel,
-		NebulaGraphModel: nebulaGraphModel,
-		GraphExtractor:   graphExtractor,
+		Config:             c,
+		TenantLlmModel:     tenant_llm.NewTenantLlmModel(sqlConn, c.Cache),
+		KnowledgeBaseModel: knowledge_base.NewKnowledgeBaseModel(sqlConn, c.Cache),
+		ChunkModel:         chunkModel,
+		GraphModel:         graphModel,
+		NebulaGraphModel:   nebulaGraphModel,
+		GraphExtractor:     graphExtractor,
 	}
 }

@@ -145,6 +145,7 @@ func (m *nebulaGraphModel) EnsureSpaceAndSchema(ctx context.Context, kbId string
 	// 4. 创建 EdgeType: relates_to
 	createEdgeNgql := `
 		CREATE EDGE IF NOT EXISTS relates_to (
+			type string,
 			description string,
 			weight double,
 			source_ids string
@@ -248,9 +249,9 @@ func (m *nebulaGraphModel) BatchInsertRelations(ctx context.Context, kbId string
 		sourceIdsStr := strings.Join(r.SourceId, ",")
 
 		ngql := fmt.Sprintf(`
-			INSERT EDGE relates_to(description, weight, source_ids) VALUES 
-			"%s"->"%s":("%s", %f, "%s");
-		`, srcVid, dstVid, escapeString(r.Description), r.Weight, escapeString(sourceIdsStr))
+			INSERT EDGE relates_to(type, description, weight, source_ids) VALUES 
+			"%s"->"%s":("%s", "%s", %f, "%s");
+		`, srcVid, dstVid, escapeString(r.Type), escapeString(r.Description), r.Weight, escapeString(sourceIdsStr))
 
 		result, err := session.Execute(ngql)
 		if err != nil {
@@ -425,6 +426,9 @@ func parseRelationFromMap(m map[string]*ngen.Value) types.Relation {
 	r := types.Relation{}
 	if m == nil {
 		return r
+	}
+	if val, ok := m["type"]; ok && len(val.SVal) > 0 {
+		r.Type = string(val.SVal)
 	}
 	if val, ok := m["description"]; ok && len(val.SVal) > 0 {
 		r.Description = string(val.SVal)
