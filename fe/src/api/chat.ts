@@ -2,8 +2,9 @@ import request from '@/utils/request';
 import type { ChatReq, ChatResp, StartNewChatResp, GetConversationListResp, ChatMessage } from '@/types/chat';
 
 // 开启新对话
-export async function startNewChat(): Promise<StartNewChatResp> {
-    return request.post<any, StartNewChatResp>('/chat/new');
+// 开启新对话
+export async function startNewChat(data: any): Promise<StartNewChatResp> {
+    return request.post<any, StartNewChatResp>('/chat/new', data);
 }
 
 // 获取会话列表

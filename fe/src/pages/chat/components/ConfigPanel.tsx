@@ -55,14 +55,24 @@ export default function ConfigPanel() {
                 setModels(chatRes.list || []);
                 if (chatRes.list?.length > 0 && !config.model_id) {
                     // Default to the first one if not set
-                    setConfig({ model_id: chatRes.list[0].id });
+                    const m = chatRes.list[0];
+                    setConfig({
+                        model_id: m.id,
+                        model_name: m.llm_name,
+                        model_factory: m.llm_factory
+                    });
                 }
 
                 // Fetch Rerank Models
                 const rerankRes = await listTenantLlm({ model_type: 'Rerank', page_size: 100 });
                 setRerankModels(rerankRes.list || []);
                 if (rerankRes.list?.length > 0 && !config.rerank_model_id) {
-                    setConfig({ rerank_model_id: rerankRes.list[0].id });
+                    const m = rerankRes.list[0];
+                    setConfig({
+                        rerank_model_id: m.id,
+                        rerank_model_name: m.llm_name,
+                        rerank_model_factory: m.llm_factory
+                    });
                 }
             } catch (e) {
                 console.error('Failed to fetch models', e);
@@ -96,7 +106,14 @@ export default function ConfigPanel() {
                         <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">模型 (Model)</Label>
                         <Select
                             value={config.model_id?.toString() || ''}
-                            onValueChange={(val) => setConfig({ model_id: parseInt(val) })}
+                            onValueChange={(val) => {
+                                const m = models.find(x => x.id === parseInt(val));
+                                setConfig({
+                                    model_id: parseInt(val),
+                                    model_name: m?.llm_name,
+                                    model_factory: m?.llm_factory
+                                });
+                            }}
                         >
                             <SelectTrigger className="bg-white">
                                 <SelectValue placeholder="选择模型" />
@@ -291,7 +308,14 @@ export default function ConfigPanel() {
                                         ) : (
                                             <Select
                                                 value={config.rerank_model_id?.toString() || ''}
-                                                onValueChange={(val) => setConfig({ rerank_model_id: parseInt(val) })}
+                                                onValueChange={(val) => {
+                                                    const m = rerankModels.find(x => x.id === parseInt(val));
+                                                    setConfig({
+                                                        rerank_model_id: parseInt(val),
+                                                        rerank_model_name: m?.llm_name,
+                                                        rerank_model_factory: m?.llm_factory
+                                                    });
+                                                }}
                                             >
                                                 <SelectTrigger className="bg-white h-8 text-xs">
                                                     <SelectValue placeholder="选择重排序模型" />

@@ -55,10 +55,40 @@ export default function ChatWindow() {
         // 1. Create Conversation if needed
         if (!conversationId) {
             try {
-                const resp = await startNewChat();
+                // Validate Config
+                const chatModelId = Number(config.model_id);
+                if (!chatModelId) {
+                    toast.error('请先在右侧配置面板选择模型');
+                    return;
+                }
+
+                const startReq: any = { // Use 'any' or import StartNewChatReq type
+                    llm_id: config.model_name && config.model_factory ? `${config.model_name}@${config.model_factory}` : undefined,
+                    enable_quote_doc: true, // Default
+                    enable_llm_keyword_extract: true, // Default
+                    enable_tts: false,
+                    system_prompt: config.system_prompt,
+                    kb_ids: config.knowledge_base_ids,
+                    temperature: config.temperature,
+                    retrieval_config: {
+                        mode: config.retrieval_mode,
+                        rerank_mode: config.hybrid_strategy_type,
+                        rerank_vector_weight: config.weight_vector,
+                        top_n: 10, // Default or add to store
+                        rerank_id: config.rerank_model_name && config.rerank_model_factory ? `${config.rerank_model_name}@${config.rerank_model_factory}` : undefined,
+                        top_k: config.top_k,
+                        score: config.score_threshold
+                    }
+                };
+
+                // Fallback for ID if names missing (should be set by ConfigPanel)
+                if (!startReq.llm_id) startReq.llm_id = chatModelId.toString();
+
+                const resp = await startNewChat(startReq);
                 conversationId = resp.conversation_id;
                 setCurrentConversationId(conversationId);
             } catch (e) {
+                console.error(e);
                 toast.error('创建对话失败');
                 return;
             }

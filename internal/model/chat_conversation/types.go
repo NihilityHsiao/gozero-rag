@@ -24,6 +24,7 @@ type RetrievalConfig struct {
 	TopN               int     `json:"top_n"`                // 最终传给 LLM 的切片数量
 	RerankId           string  `json:"rerank_id"`            // 重排序模型 ID 或名称
 	TopK               int     `json:"top_k"`                // 传给 Rerank 模型的候选数量
+	Score              float64 `json:"score"`                // 相似度阈值
 }
 
 func (m *ChatConversation) GetConfig() (*ConversationConfig, error) {

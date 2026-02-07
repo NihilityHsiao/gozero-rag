@@ -101,6 +101,16 @@ type Conversation struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+type ConversationRetrievalConfig struct {
+	Mode               string  `json:"mode,optional"`
+	RerankMode         string  `json:"rerank_mode,optional"`
+	RerankVectorWeight float64 `json:"rerank_vector_weight,optional"`
+	TopN               int     `json:"top_n,optional"`
+	RerankId           string  `json:"rerank_id,optional"`
+	TopK               int     `json:"top_k,optional"`
+	Score              float64 `json:"score,optional"`
+}
+
 type CreateInviteReq struct {
 	Email string `json:"email"` // 被邀请人邮箱
 }
@@ -518,6 +528,14 @@ type SetDefaultModelResp struct {
 }
 
 type StartNewChatReq struct {
+	LlmId                   string                      `json:"llm_id"`
+	EnableQuoteDoc          bool                        `json:"enable_quote_doc,optional"`
+	EnableLlmKeywordExtract bool                        `json:"enable_llm_keyword_extract,optional"`
+	EnableTts               bool                        `json:"enable_tts,optional"`
+	SystemPrompt            string                      `json:"system_prompt,optional"`
+	KbIds                   []string                    `json:"kb_ids,optional"`
+	Temperature             float64                     `json:"temperature,optional"`
+	RetrievalConfig         ConversationRetrievalConfig `json:"retrieval_config,optional"`
 }
 
 type StartNewChatResp struct {

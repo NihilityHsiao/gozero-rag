@@ -5,6 +5,8 @@ package chat
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"gozero-rag/internal/model/chat_conversation"
 	"gozero-rag/internal/xerr"
 	"gozero-rag/restful/rag/internal/common"
@@ -47,7 +49,35 @@ func (l *StartNewChatLogic) StartNewChat(req *types.StartNewChatReq) (resp *type
 	}
 	conversationId := conversationIdObj.String()
 
-	// 2. Create conversation record
+	// 2. Prepare Config JSON
+	retrievalConfig := chat_conversation.RetrievalConfig{
+		Mode:               req.RetrievalConfig.Mode,
+		RerankMode:         req.RetrievalConfig.RerankMode,
+		RerankVectorWeight: req.RetrievalConfig.RerankVectorWeight,
+		TopN:               req.RetrievalConfig.TopN,
+		RerankId:           req.RetrievalConfig.RerankId,
+		TopK:               req.RetrievalConfig.TopK,
+		Score:              req.RetrievalConfig.Score,
+	}
+
+	config := chat_conversation.ConversationConfig{
+		LlmId:                   req.LlmId,
+		EnableQuoteDoc:          req.EnableQuoteDoc,
+		EnableLlmKeywordExtract: req.EnableLlmKeywordExtract,
+		EnableTts:               req.EnableTts,
+		SystemPrompt:            req.SystemPrompt,
+		KbIds:                   req.KbIds,
+		Temperature:             req.Temperature,
+		RetrievalConfig:         retrievalConfig,
+	}
+
+	configBytes, err := json.Marshal(config)
+	if err != nil {
+		logx.Errorf("failed to marshal conversation config: %v", err)
+		return nil, xerr.NewInternalErrMsg("failed to process configuration")
+	}
+
+	// 3. Create conversation record
 	newConversation := &chat_conversation.ChatConversation{
 		Id:           conversationId,
 		UserId:       userId,
@@ -55,6 +85,7 @@ func (l *StartNewChatLogic) StartNewChat(req *types.StartNewChatReq) (resp *type
 		Title:        "New Conversation",
 		Status:       1, // Normal
 		MessageCount: 0,
+		Config:       sql.NullString{String: string(configBytes), Valid: true},
 	}
 
 	_, err = l.svcCtx.ChatConversationModel.Insert(l.ctx, newConversation)

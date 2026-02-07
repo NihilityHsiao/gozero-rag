@@ -11,6 +11,10 @@ export interface ChatRetrieveConfig {
 
 export interface ChatModelConfig {
     model_id?: number;
+    // Extra fields to support textual config storage
+    model_name?: string;
+    model_factory?: string;
+
     knowledge_base_ids?: string[];
     system_prompt?: string;
     temperature?: number;
@@ -23,6 +27,9 @@ export interface ChatModelConfig {
     weight_vector?: number;
     weight_keyword?: number;
     rerank_model_id?: number;
+    // Extra fields for rerank
+    rerank_model_name?: string;
+    rerank_model_factory?: string;
 }
 
 export interface Conversation {
@@ -64,6 +71,27 @@ export interface ChatMessage {
             completion_tokens: number;
             total_tokens: number;
         };
+    };
+}
+
+// 开启新对话请求
+export interface StartNewChatReq {
+    llm_id: string; // 模型名称@厂商
+    enable_quote_doc?: boolean;
+    enable_llm_keyword_extract?: boolean;
+    enable_tts?: boolean;
+    system_prompt?: string;
+    kb_ids?: string[];
+    temperature?: number;
+
+    retrieval_config?: {
+        mode?: string;
+        rerank_mode?: string;
+        rerank_vector_weight?: number;
+        top_n?: number;
+        rerank_id?: string; // 模型名称@厂商
+        top_k?: number;
+        score?: number;
     };
 }
 
