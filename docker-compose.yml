@@ -15,9 +15,18 @@ services:
       - mysql-data:/var/lib/mysql
       - ./script/mysql/user.sql:/docker-entrypoint-initdb.d/user.sql
       - ./script/mysql/user_api.sql:/docker-entrypoint-initdb.d/user_api.sql
+      - ./script/mysql/user_tenant.sql:/docker-entrypoint-initdb.d/user_tenant.sql
       - ./script/mysql/knowledge_base.sql:/docker-entrypoint-initdb.d/knowledge_base.sql
       - ./script/mysql/knowledge_document.sql:/docker-entrypoint-initdb.d/knowledge_document.sql
       - ./script/mysql/knowledge_retrieval_log.sql:/docker-entrypoint-initdb.d/knowledge_retrieval_log.sql
+      - ./script/mysql/chat_conversation.sql:/docker-entrypoint-initdb.d/chat_conversation.sql
+      - ./script/mysql/chat_message.sql:/docker-entrypoint-initdb.d/chat_message.sql
+      - ./script/mysql/knowledge.sql:/docker-entrypoint-initdb.d/knowledge.sql
+      - ./script/mysql/llm.sql:/docker-entrypoint-initdb.d/llm.sql
+      - ./script/mysql/llm_factories.sql:/docker-entrypoint-initdb.d/llm_factories.sql
+      - ./script/mysql/task.sql:/docker-entrypoint-initdb.d/task.sql
+      - ./script/mysql/tenant.sql:/docker-entrypoint-initdb.d/tenant.sql
+      - ./script/mysql/tenant_llm.sql:/docker-entrypoint-initdb.d/tenant_llm.sql
 
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-root}"]
