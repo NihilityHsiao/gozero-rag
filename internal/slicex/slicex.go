@@ -45,3 +45,33 @@ func Filter[T any](slice []T, fn func(T) bool) []T {
 	}
 	return result
 }
+
+// Split 将切片分隔成多个子切片，每个子切片最多 n 个元素
+//
+// 用法示例:
+//
+//	batches := slicex.Split(entities, 36)
+//	for _, batch := range batches {
+//	    // 每批最多36个
+//	}
+func Split[T any](slice []T, n int) [][]T {
+	if n <= 0 {
+		n = 1
+	}
+	if len(slice) == 0 {
+		return [][]T{}
+	}
+
+	numParts := (len(slice) + n - 1) / n // 向上取整
+	result := make([][]T, 0, numParts)
+
+	for i := 0; i < len(slice); i += n {
+		end := i + n
+		if end > len(slice) {
+			end = len(slice)
+		}
+		result = append(result, slice[i:end])
+	}
+
+	return result
+}

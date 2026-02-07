@@ -27,6 +27,7 @@ require (
 	github.com/zeromicro/go-queue v1.2.2
 	github.com/zeromicro/go-zero v1.9.4
 	golang.org/x/crypto v0.45.0
+	golang.org/x/sync v0.18.0
 	google.golang.org/grpc v1.73.0
 )
 
@@ -172,7 +173,6 @@ require (
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
 	golang.org/x/image v0.22.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.10.0 // indirect

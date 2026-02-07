@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/zeromicro/go-zero/core/logx"
+	"golang.org/x/sync/errgroup"
 
 	"gozero-rag/internal/graphrag/prompt"
 	"gozero-rag/internal/graphrag/types"
@@ -152,6 +154,97 @@ func (e *GraphExtractor) Extract(ctx context.Context, chunks []*chunk.Chunk, llm
 
 	result = e.Merge([]*types.GraphExtractionResult{result})
 	return result, nil
+}
+
+// ParallelExtract 将 chunks 分成 numParts 份，用 concurrency 个 goroutine 并行提取
+// 内部合并所有结果后返回，对调用方透明
+func (e *GraphExtractor) ParallelExtract(
+	ctx context.Context,
+	chunks []*chunk.Chunk,
+	llm model.ToolCallingChatModel,
+	numParts int,
+	concurrency int,
+) (*types.GraphExtractionResult, error) {
+	if len(chunks) == 0 {
+		return &types.GraphExtractionResult{
+			Entities:  make([]types.Entity, 0),
+			Relations: make([]types.Relation, 0),
+		}, nil
+	}
+
+	// 分割 chunks
+	chunkParts := splitSlice(chunks, numParts)
+	logx.Infof("并行提取: 总 chunks=%d, 分成 %d 份, 并发数=%d", len(chunks), len(chunkParts), concurrency)
+
+	// 用于收集结果
+	var mu sync.Mutex
+	results := make([]*types.GraphExtractionResult, 0, len(chunkParts))
+
+	// 使用 errgroup 控制并发
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(concurrency) // 限制并发数
+
+	for i, part := range chunkParts {
+		partIndex := i
+		partChunks := part
+		g.Go(func() error {
+			logx.Infof("开始提取第 %d 部分 (%d chunks)", partIndex+1, len(partChunks))
+
+			// 调用原有的 Extract 处理这部分 chunks
+			partResult, err := e.Extract(gctx, partChunks, llm)
+			if err != nil {
+				logx.Errorf("提取第 %d 部分失败: %v", partIndex+1, err)
+				return err
+			}
+
+			// 收集结果
+			mu.Lock()
+			results = append(results, partResult)
+			mu.Unlock()
+
+			logx.Infof("第 %d 部分提取完成: %d 实体, %d 关系",
+				partIndex+1, len(partResult.Entities), len(partResult.Relations))
+			return nil
+		})
+	}
+
+	// 等待所有 goroutine 完成
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("parallel extraction failed: %w", err)
+	}
+
+	// 合并所有结果
+	finalResult := e.Merge(results)
+	logx.Infof("并行提取完成: 合并后 %d 实体, %d 关系",
+		len(finalResult.Entities), len(finalResult.Relations))
+
+	return finalResult, nil
+}
+
+// splitSlice 将 slice 分成 n 份
+func splitSlice[T any](slice []T, n int) [][]T {
+	if n <= 0 {
+		n = 1
+	}
+	if n > len(slice) {
+		n = len(slice)
+	}
+
+	result := make([][]T, n)
+	partSize := len(slice) / n
+	remainder := len(slice) % n
+
+	start := 0
+	for i := 0; i < n; i++ {
+		end := start + partSize
+		if i < remainder {
+			end++ // 前 remainder 份多分一个
+		}
+		result[i] = slice[start:end]
+		start = end
+	}
+
+	return result
 }
 
 func (e *GraphExtractor) parseHistory(history string, sourceId string) ([]types.Entity, []types.Relation) {

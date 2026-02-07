@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"gozero-rag/internal/batch"
 	"gozero-rag/internal/tools/llmx"
 	"time"
 
@@ -101,7 +100,7 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 	// 4. Extract Graph
 	logx.Infof("开始提取知识图谱, doc_id: %s", msg.DocumentId)
 
-	extractResult, err := l.svcCtx.GraphExtractor.Extract(ctx, chunkResult.Chunks, llm)
+	extractResult, err := l.svcCtx.GraphExtractor.ParallelExtract(ctx, chunkResult.Chunks, llm, 10, 8)
 	if err != nil {
 		logx.Errorf("extract graph failed: %v", err)
 		return err
@@ -110,47 +109,18 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 
 	// 4.2 对entity做embedding (使用batch包分批处理，每批36个)
 	if len(extractResult.Entities) > 0 {
-		const batchSize = 36
-		logx.Infof("开始生成实体embedding, 实体数: %d, 批大小: %d", len(extractResult.Entities), batchSize)
 
-		// 创建batch处理器
-		b := batch.NewBatch[int](batchSize)
+		logx.Infof("开始生成实体embedding, 实体数: %d", len(extractResult.Entities))
 
-		// 推送实体索引到batch
-		b.PushFunc(func(in chan int) error {
-			for i := range extractResult.Entities {
-				in <- i
-			}
-			return nil
-		})
-
-		// 读取batch并生成embedding
-		for result := range b.ReadChannel() {
-			// 收集当前批次的实体名称
-			batchNames := make([]string, len(result.Items))
-			for j, idx := range result.Items {
-				batchNames[j] = extractResult.Entities[idx].Name
-			}
-
-			// 生成embedding
-			embeddings, err := embedder.EmbedStrings(ctx, batchNames)
+		for i, e := range extractResult.Entities {
+			embVector, err := embedder.EmbedStrings(l.ctx, []string{e.Name})
 			if err != nil {
-				logx.Errorf("generate embeddings batch %d failed: %v", result.BatchNum, err)
-				continue // 跳过失败批次，继续处理下一批
+				logx.Errorf("实体 [%s] 向量化失败, err:%v", e.Name, err)
 			}
 
-			// 将embedding赋值给对应实体
-			for j, idx := range result.Items {
-				if j < len(embeddings) {
-					extractResult.Entities[idx].Embedding = embeddings[j]
-				}
-			}
-			logx.Infof("实体embedding批次 %d 完成 (%d个)", result.BatchNum, len(result.Items))
+			extractResult.Entities[i].Embedding = embVector[0]
 		}
 
-		if err := b.Error(); err != nil {
-			logx.Errorf("batch processing error: %v", err)
-		}
 	}
 
 	// 5. Save to NebulaGraph
