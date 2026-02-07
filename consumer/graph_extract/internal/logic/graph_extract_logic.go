@@ -107,7 +107,7 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 	}
 	logx.Infof("doc [%s] ,知识图谱提取完成, 实体数: %d, 关系数: %d", msg.DocumentId, len(extractResult.Entities), len(extractResult.Relations))
 
-	// 4.2 对entity做embedding (使用batch包分批处理，每批36个)
+	// 4.2 对entity做embedding
 	if len(extractResult.Entities) > 0 {
 
 		logx.Infof("开始生成实体embedding, 实体数: %d", len(extractResult.Entities))
@@ -129,14 +129,14 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 		return err
 	}
 
-	// 6. Transform to ES Documents
-	//esDocs := l.transformToEsDocs(extractResult, msg.KnowledgeBaseId)
+	// 6. Transform to ES Documents (with embeddings)
+	esDocs := l.transformToEsDocs(extractResult, msg.KnowledgeBaseId)
 
 	// 7. Save to ES
-	//if err := l.svcCtx.GraphModel.Put(ctx, esDocs); err != nil {
-	//	logx.Errorf("save graph to es failed: %v", err)
-	//	return err
-	//}
+	if err := l.svcCtx.GraphModel.Put(ctx, esDocs); err != nil {
+		logx.Errorf("save graph to es failed: %v", err)
+		// 不阻塞流程
+	}
 
 	logx.Infof("graph extraction completed for doc: %s", msg.DocumentId)
 	return nil
@@ -156,34 +156,40 @@ func (l *GraphExtractLogic) transformToEsDocs(result *types.GraphExtractionResul
 			Description: entity.Description,
 			Weight:      1.0, // Default weight for entity
 			SourceIds:   entity.SourceId,
-			UpdatedAt:   l.nowStr(), // ISO8601 or similar? ES accepts various formats. Default to string? Or use int64.
-			// Let's rely on ES current time? No, script helper needs 'now'.
-			// Better use standard time format.
+			Embedding:   entity.Embedding, // 向量嵌入
+			UpdatedAt:   l.nowStr(),
 		}
-		// Content backup
-		contentBytes, _ := json.Marshal(entity)
+		// Content backup (不含 embedding，避免重复存储)
+		entityBackup := types.Entity{
+			Name:        entity.Name,
+			Type:        entity.Type,
+			Description: entity.Description,
+			SourceId:    entity.SourceId,
+		}
+		contentBytes, _ := json.Marshal(entityBackup)
 		doc.ContentWithWeight = string(contentBytes)
 		docs = append(docs, doc)
 	}
 
-	// Relations
-	for _, rel := range result.Relations {
-		id := l.genRelationId(kbId, rel.SrcId, rel.DstId)
-		doc := &graph.EsGraphDocument{
-			Id:          id,
-			KbId:        kbId,
-			GraphType:   "relation",
-			SrcName:     rel.SrcId,
-			DstName:     rel.DstId,
-			Description: rel.Description,
-			Weight:      rel.Weight,
-			SourceIds:   rel.SourceId,
-			UpdatedAt:   l.nowStr(),
-		}
-		contentBytes, _ := json.Marshal(rel)
-		doc.ContentWithWeight = string(contentBytes)
-		docs = append(docs, doc)
-	}
+	// 只存实体
+	//// Relations
+	//for _, rel := range result.Relations {
+	//	id := l.genRelationId(kbId, rel.SrcId, rel.DstId)
+	//	doc := &graph.EsGraphDocument{
+	//		Id:          id,
+	//		KbId:        kbId,
+	//		GraphType:   "relation",
+	//		SrcName:     rel.SrcId,
+	//		DstName:     rel.DstId,
+	//		Description: rel.Description,
+	//		Weight:      rel.Weight,
+	//		SourceIds:   rel.SourceId,
+	//		UpdatedAt:   l.nowStr(),
+	//	}
+	//	contentBytes, _ := json.Marshal(rel)
+	//	doc.ContentWithWeight = string(contentBytes)
+	//	docs = append(docs, doc)
+	//}
 
 	return docs
 }

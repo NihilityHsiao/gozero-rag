@@ -61,6 +61,11 @@ type ServiceContext struct {
 	NebulaGraphModel graph.NebulaGraphModel
 }
 
+func (svc *ServiceContext) ensureKnowledgeBaseHasGraphSpace() {
+	// todo: 确保每个数据库都创建了 space
+
+}
+
 func NewServiceContext(c config.Config) *ServiceContext {
 
 	sqlConn := sqlx.NewMysql(c.Mysql.DataSource)
@@ -104,7 +109,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(err)
 	}
 
-	return &ServiceContext{
+	svc := &ServiceContext{
 		Config: c,
 
 		MqPusherClient:  mq.NewKafka(kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)),
@@ -132,4 +137,5 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 		NebulaGraphModel: nebulaGraphModel,
 	}
+	return svc
 }

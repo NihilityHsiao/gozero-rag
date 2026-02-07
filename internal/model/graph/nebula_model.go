@@ -2,7 +2,6 @@ package graph
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -130,13 +129,12 @@ func (m *nebulaGraphModel) EnsureSpaceAndSchema(ctx context.Context, kbId string
 		return fmt.Errorf("use space failed: %w", err)
 	}
 
-	// 3. 创建 Tag: entity
+	// 3. 创建 Tag: entity (注: embedding 存储在 ES)
 	createEntityTagNgql := `
 		CREATE TAG IF NOT EXISTS entity (
 			name string,
 			type string,
 			description string,
-			embedding string,
 			source_ids string
 		);
 	`
@@ -188,22 +186,19 @@ func (m *nebulaGraphModel) BatchUpsertEntities(ctx context.Context, kbId string,
 
 	// 切换到 Space
 	useSpaceNgql := fmt.Sprintf("USE %s;", spaceName)
-	if _, err := session.Execute(useSpaceNgql); err != nil {
+	result, err := session.Execute(useSpaceNgql)
+	if err != nil {
 		return fmt.Errorf("use space failed: %w", err)
 	}
+	if !result.IsSucceed() {
+		return fmt.Errorf("use space failed: %s", result.GetErrorMsg())
+	}
 
-	// 批量 UPSERT 实体
+	// 批量 UPSERT 实体 (注: embedding 存储在 ES)
 	successCount := 0
 	for _, e := range entities {
 		vid := escapeVid(e.Name)
 		sourceIdsStr := strings.Join(e.SourceId, ",")
-
-		// 将 embedding 序列化为 JSON 字符串
-		embeddingStr := ""
-		if len(e.Embedding) > 0 {
-			embBytes, _ := json.Marshal(e.Embedding)
-			embeddingStr = string(embBytes)
-		}
 
 		// 使用 UPSERT 实现新增或更新
 		ngql := fmt.Sprintf(`
@@ -211,9 +206,8 @@ func (m *nebulaGraphModel) BatchUpsertEntities(ctx context.Context, kbId string,
 			SET name = "%s",
 				type = "%s",
 				description = "%s",
-				embedding = "%s",
 				source_ids = "%s";
-		`, vid, escapeString(e.Name), escapeString(e.Type), escapeString(e.Description), escapeString(embeddingStr), escapeString(sourceIdsStr))
+		`, vid, escapeString(e.Name), escapeString(e.Type), escapeString(e.Description), escapeString(sourceIdsStr))
 
 		result, err := session.Execute(ngql)
 		if err != nil {
@@ -247,8 +241,12 @@ func (m *nebulaGraphModel) BatchInsertRelations(ctx context.Context, kbId string
 
 	// 切换到 Space
 	useSpaceNgql := fmt.Sprintf("USE %s;", spaceName)
-	if _, err := session.Execute(useSpaceNgql); err != nil {
+	result, err := session.Execute(useSpaceNgql)
+	if err != nil {
 		return fmt.Errorf("use space failed: %w", err)
+	}
+	if !result.IsSucceed() {
+		return fmt.Errorf("use space failed: %s", result.GetErrorMsg())
 	}
 
 	// 批量 INSERT 边 (边使用 INSERT 覆盖，不用 UPSERT)

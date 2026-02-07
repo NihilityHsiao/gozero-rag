@@ -14,6 +14,7 @@ import (
 
 const (
 	DefaultGraphIndexName = "kg_graph"
+	DefaultEmbeddingDims  = 1024 // 向量维度，随 embedding 模型变化
 )
 
 type EsGraphDocument struct {
@@ -27,9 +28,10 @@ type EsGraphDocument struct {
 	DstName    string `json:"dst_name,omitempty"`    // for relation
 
 	// 这里为了支持 Script Upsert，将 ContentWithWeight 中的关键合并字段提取出来
-	Description string   `json:"description"`
-	Weight      float64  `json:"weight"`
-	SourceIds   []string `json:"source_ids"`
+	Description string    `json:"description"`
+	Weight      float64   `json:"weight"`
+	SourceIds   []string  `json:"source_ids"`
+	Embedding   []float64 `json:"embedding,omitempty"` // 实体向量嵌入 (仅 entity)
 
 	ContentWithWeight string `json:"content_with_weight"` // 原始 JSON 备份
 	UpdatedAt         string `json:"updated_at"`
@@ -133,6 +135,12 @@ func (m *EsGraphModel) SetupIndex(ctx context.Context) error {
 				},
 				"updated_at": map[string]interface{}{
 					"type": "date",
+				},
+				"embedding": map[string]interface{}{
+					"type":       "dense_vector",
+					"dims":       DefaultEmbeddingDims,
+					"index":      true,
+					"similarity": "cosine",
 				},
 			},
 		},
