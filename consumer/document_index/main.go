@@ -24,7 +24,7 @@ func main() {
 	_ = godotenv.Load("../../.env") // consumer/document_index 目录运行
 
 	var c config.Config
-	conf.MustLoad(*configFile, &c)
+	conf.MustLoad(*configFile, &c, conf.UseEnv())
 
 	svcCtx := svc.NewServiceContext(c)
 	ctx := context.Background()

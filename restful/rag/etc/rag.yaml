@@ -5,7 +5,7 @@ Timeout: 0
 MaxBytes: 104857600 # 请求体大小限制为100MB
 Auth:
   AccessSecret: "${JWT_SECRET}"
-  AccessExpire: 86400  # 24小时，单位秒
+  AccessExpire: ${JWT_EXPIRE}  # 24小时，单位秒
 
 Mysql:
   DataSource: "${MYSQL_USER}:${DB_PASSWORD}@tcp(${MYSQL_HOST}:${MYSQL_PORT})/${MYSQL_DATABASE}?charset=utf8mb4&parseTime=True&loc=Local"
