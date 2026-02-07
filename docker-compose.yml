@@ -248,8 +248,9 @@ services:
     networks:
       - app-network
     ports:
-      # 下面的配置中,设置了9094端口给宿主机访问
-      - "9092:9094"  # 映射 Kafka 的端口
+      # Expose two ports for dual access:
+      - "9092:9094"  # Remote Access (via 192.168.0.10:9092)
+      - "9093:9095"  # Local Access (via localhost:9093)
     environment:
       KAFKA_KRAFT_MODE: "true"   # 启用 KRaft 模式,不依赖zookeeper
       CLUSTER_ID: "lucas"  # 集群ID, 每个 Kafka 集群都有一个唯一的 ID，用于标识集群
@@ -263,23 +264,26 @@ services:
       # PLAINTEXT: 消费者和生产者连接到这个地址来发送/消费数据
       # CONTROLLER: 控制器节点之间的通信地址, 用于控制器节点之间的通信
 #      KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9093,PLAINTEXT://0.0.0.0:9092
-      # 声明2个独立监听器：
+      # 声明3个独立监听器：
       # - PLAINTEXT_INTERNAL：容器间通信（9092端口）
-      # - PLAINTEXT_HOST：宿主机通信（9094端口，映射到宿主机9092）
+      # - PLAINTEXT_HOST：宿主机IP通信（9094端口，映射到宿主机9092）
+      # - PLAINTEXT_LOCALHOST：本地localhost通信（9095端口，映射到宿主机9093）
       KAFKA_LISTENERS: >-
         CONTROLLER://0.0.0.0:9093,
         PLAINTEXT_INTERNAL://0.0.0.0:9092,
-        PLAINTEXT_HOST://0.0.0.0:9094
+        PLAINTEXT_HOST://0.0.0.0:9094,
+        PLAINTEXT_LOCALHOST://0.0.0.0:9095
 #      KAFKA_ADVERTISED_LISTENERS: CONTROLLER://localhost:9093,PLAINTEXT://localhost:9092
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER  # 控制器节点之间的通信监听器名称, 用于控制器节点之间的通信
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL  # 内部broker之间的通信监听器名称, 用于broker之间的通信
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER  # 控制器节点之间的通信监听器名称
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL  # 内部broker之间的通信监听器名称
 
       # 广告地址：每个监听器名称唯一，对应不同寻址方式
-      # 容器间用kafka:9092
-      # 宿主机用localhost:9092（映射9094→9092）
+      # 外部IP访问：使用 PLAINTEXT_HOST (映射9094 -> 9092)
+      # 本地访问：使用 PLAINTEXT_LOCALHOST (映射9095 -> 9093)
       KAFKA_ADVERTISED_LISTENERS: >-
         PLAINTEXT_INTERNAL://kafka:9092,    
-        PLAINTEXT_HOST://localhost:9092
+        PLAINTEXT_HOST://192.168.0.10:9092,
+        PLAINTEXT_LOCALHOST://localhost:9093
       # 仅保留 PLAINTEXT 监听器
 #      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
 #      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
@@ -287,7 +291,8 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >-
         CONTROLLER:PLAINTEXT,
         PLAINTEXT_INTERNAL:PLAINTEXT,
-        PLAINTEXT_HOST:PLAINTEXT
+        PLAINTEXT_HOST:PLAINTEXT,
+        PLAINTEXT_LOCALHOST:PLAINTEXT
 
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"  # 自动创建主题, 用于自动创建主题
