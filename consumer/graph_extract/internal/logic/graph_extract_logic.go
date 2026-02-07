@@ -78,11 +78,13 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 	}
 
 	// 4. Extract Graph
+	logx.Infof("开始提取知识图谱, doc_id: %s", msg.DocumentId)
 	extractResult, err := l.svcCtx.GraphExtractor.Extract(ctx, chunkResult.Chunks, llm)
 	if err != nil {
 		logx.Errorf("extract graph failed: %v", err)
 		return err
 	}
+	logx.Infof("doc [%s] ,知识图谱提取完成", msg.DocumentId)
 
 	// 5. Save to NebulaGraph
 	if err := l.saveToNebula(ctx, extractResult, msg.KnowledgeBaseId); err != nil {

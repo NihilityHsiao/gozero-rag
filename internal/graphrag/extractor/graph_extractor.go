@@ -122,7 +122,8 @@ func (e *GraphExtractor) Extract(ctx context.Context, chunks []*chunk.Chunk, llm
 	}
 
 	// Process each chunk
-	for _, c := range chunks {
+	cl := len(chunks)
+	for i, c := range chunks {
 		state := &GraphExtractionState{
 			InputText: c.Content,
 			History:   "",
@@ -135,7 +136,7 @@ func (e *GraphExtractor) Extract(ctx context.Context, chunks []*chunk.Chunk, llm
 			// Run the graph iteration
 			newState, err := runnable.Invoke(ctx, state)
 			if err != nil {
-				fmt.Printf("Error extracting from chunk %v: %v\n", c.Id, err)
+				logx.Errorf("Error extracting from chunk %v: %v", c.Id, err)
 				break
 			}
 			state = newState
@@ -145,10 +146,11 @@ func (e *GraphExtractor) Extract(ctx context.Context, chunks []*chunk.Chunk, llm
 		entities, relations := e.parseHistory(state.History, c.Id)
 		result.Entities = append(result.Entities, entities...)
 		result.Relations = append(result.Relations, relations...)
+		logx.Infof("知识图谱提取进度: %d/%d", i+1, cl)
+
 	}
 
 	result = e.Merge([]*types.GraphExtractionResult{result})
-
 	return result, nil
 }
 
