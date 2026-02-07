@@ -6,9 +6,10 @@ type GraphExtractionResult struct {
 }
 
 type Entity struct {
-	Name        string `json:"name"`        // 实体名称
-	Type        string `json:"type"`        // 实体的分类标签, 如 organization | person | geo | event
-	Description string `json:"description"` // llm生成的关于该实体的综合描述
+	Name        string    `json:"name"`        // 实体名称
+	Type        string    `json:"type"`        // 实体的分类标签, 如 organization | person | geo | event
+	Description string    `json:"description"` // llm生成的关于该实体的综合描述
+	Embedding   []float64 `json:"embedding"`   // 实体名称的向量嵌入
 	// 关键的溯源信息, 记录这个实体在哪些chunk中出现
 	// chunk id的格式:
 	// 可能为 chunk-xxhash(chunk内容-chunk对应的文档的uuidv7)

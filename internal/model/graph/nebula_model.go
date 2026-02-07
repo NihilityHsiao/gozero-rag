@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -135,6 +136,7 @@ func (m *nebulaGraphModel) EnsureSpaceAndSchema(ctx context.Context, kbId string
 			name string,
 			type string,
 			description string,
+			embedding string,
 			source_ids string
 		);
 	`
@@ -196,14 +198,22 @@ func (m *nebulaGraphModel) BatchUpsertEntities(ctx context.Context, kbId string,
 		vid := escapeVid(e.Name)
 		sourceIdsStr := strings.Join(e.SourceId, ",")
 
+		// 将 embedding 序列化为 JSON 字符串
+		embeddingStr := ""
+		if len(e.Embedding) > 0 {
+			embBytes, _ := json.Marshal(e.Embedding)
+			embeddingStr = string(embBytes)
+		}
+
 		// 使用 UPSERT 实现新增或更新
 		ngql := fmt.Sprintf(`
 			UPSERT VERTEX ON entity "%s"
 			SET name = "%s",
 				type = "%s",
 				description = "%s",
+				embedding = "%s",
 				source_ids = "%s";
-		`, vid, escapeString(e.Name), escapeString(e.Type), escapeString(e.Description), escapeString(sourceIdsStr))
+		`, vid, escapeString(e.Name), escapeString(e.Type), escapeString(e.Description), escapeString(embeddingStr), escapeString(sourceIdsStr))
 
 		result, err := session.Execute(ngql)
 		if err != nil {

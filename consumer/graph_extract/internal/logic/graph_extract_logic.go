@@ -5,8 +5,11 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"strings"
+	"gozero-rag/internal/batch"
+	"gozero-rag/internal/tools/llmx"
 	"time"
+
+	openaiemb "github.com/cloudwego/eino-ext/components/embedding/openai"
 
 	"gozero-rag/consumer/graph_extract/internal/svc"
 	"gozero-rag/internal/graphrag/types"
@@ -37,17 +40,16 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 		logx.Errorf("unmarshal graph generate msg failed: %v", err)
 		return nil // commit offset
 	}
-
-	// 1. Get LLM Config
-	parts := strings.Split(msg.LlmId, "@")
-	if len(parts) != 2 {
-		logx.Errorf("invalid llm_id format: %s", msg.LlmId)
+	// get embedding config
+	kb, err := l.svcCtx.KnowledgeBaseModel.FindOne(ctx, msg.KnowledgeBaseId)
+	if err != nil {
+		logx.Errorf("find knowledge base failed: %v", err)
 		return nil
 	}
-	llmModelName, factory := parts[0], parts[1]
 
-	// get embedding config
-	//l.svcCtx.TenantLlmModel
+	embModelName, embFactory := llmx.GetModelNameFactory(kb.EmbdId)
+	// 1. Get LLM Config
+	llmModelName, factory := llmx.GetModelNameFactory(msg.LlmId)
 
 	tenantLlm, err := l.svcCtx.TenantLlmModel.FindByTenantFactoryName(ctx, msg.TenantId, factory, llmModelName)
 	if err != nil {
@@ -55,6 +57,22 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 		return nil // Should we retry? For now, commit if configuration error
 	}
 
+	tenantEmb, err := l.svcCtx.TenantLlmModel.FindByTenantFactoryName(ctx, msg.TenantId, embFactory, embModelName)
+	if err != nil {
+		logx.Errorf("find tenant embedding failed: %v", err)
+		return nil
+	}
+
+	embDim := 1024 // 后期做成可配置的
+	embedder, err := openaiemb.NewEmbedder(ctx, &openaiemb.EmbeddingConfig{
+		APIKey:     tenantEmb.ApiKey.String,
+		BaseURL:    tenantEmb.ApiBase.String,
+		Model:      tenantEmb.LlmName,
+		Dimensions: &embDim,
+	})
+	if err != nil {
+		return err
+	}
 	// 2. Initialize Chat Model
 	// Assuming OpenAI compatible interface for now as per project standard
 	llm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
@@ -82,15 +100,58 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 
 	// 4. Extract Graph
 	logx.Infof("开始提取知识图谱, doc_id: %s", msg.DocumentId)
+
 	extractResult, err := l.svcCtx.GraphExtractor.Extract(ctx, chunkResult.Chunks, llm)
 	if err != nil {
 		logx.Errorf("extract graph failed: %v", err)
 		return err
 	}
-	logx.Infof("doc [%s] ,知识图谱提取完成", msg.DocumentId)
+	logx.Infof("doc [%s] ,知识图谱提取完成, 实体数: %d, 关系数: %d", msg.DocumentId, len(extractResult.Entities), len(extractResult.Relations))
 
-	// 4.2 对entity做embedding
-	// 获取doc所在知识库的embedding id(模型名称@模型厂商)
+	// 4.2 对entity做embedding (使用batch包分批处理，每批36个)
+	if len(extractResult.Entities) > 0 {
+		const batchSize = 36
+		logx.Infof("开始生成实体embedding, 实体数: %d, 批大小: %d", len(extractResult.Entities), batchSize)
+
+		// 创建batch处理器
+		b := batch.NewBatch[int](batchSize)
+
+		// 推送实体索引到batch
+		b.PushFunc(func(in chan int) error {
+			for i := range extractResult.Entities {
+				in <- i
+			}
+			return nil
+		})
+
+		// 读取batch并生成embedding
+		for result := range b.ReadChannel() {
+			// 收集当前批次的实体名称
+			batchNames := make([]string, len(result.Items))
+			for j, idx := range result.Items {
+				batchNames[j] = extractResult.Entities[idx].Name
+			}
+
+			// 生成embedding
+			embeddings, err := embedder.EmbedStrings(ctx, batchNames)
+			if err != nil {
+				logx.Errorf("generate embeddings batch %d failed: %v", result.BatchNum, err)
+				continue // 跳过失败批次，继续处理下一批
+			}
+
+			// 将embedding赋值给对应实体
+			for j, idx := range result.Items {
+				if j < len(embeddings) {
+					extractResult.Entities[idx].Embedding = embeddings[j]
+				}
+			}
+			logx.Infof("实体embedding批次 %d 完成 (%d个)", result.BatchNum, len(result.Items))
+		}
+
+		if err := b.Error(); err != nil {
+			logx.Errorf("batch processing error: %v", err)
+		}
+	}
 
 	// 5. Save to NebulaGraph
 	if err := l.saveToNebula(ctx, extractResult, msg.KnowledgeBaseId); err != nil {
