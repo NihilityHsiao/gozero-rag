@@ -30,7 +30,6 @@ func main() {
 	ctx := context.Background()
 	serviceGroup := service.NewServiceGroup()
 	defer serviceGroup.Stop()
-	serviceGroup.Start()
 
 	for _, mq := range logic.Consumers(ctx, svcCtx) {
 		serviceGroup.Add(mq)
