@@ -1,0 +1,17 @@
+Name: compensator
+
+Mysql:
+  DataSource: ${MYSQL_DATA_SOURCE}
+
+Cache:
+  - Host: ${REDIS_HOST}
+    Type: node
+
+KqPusherConf:
+  Brokers:
+    - ${KAFKA_BROKER}
+  Name: ""
+
+Compensator:
+  Interval: 30      # 扫描间隔 (秒)
+  BatchSize: 100    # 每次扫描数量

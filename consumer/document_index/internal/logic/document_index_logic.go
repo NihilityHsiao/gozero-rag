@@ -13,6 +13,7 @@ import (
 	"gozero-rag/internal/model/chunk"
 	"gozero-rag/internal/model/knowledge_base"
 	"gozero-rag/internal/model/knowledge_document"
+	"gozero-rag/internal/model/local_message"
 	"gozero-rag/internal/mq"
 	"gozero-rag/internal/rag_core/metric"
 	"gozero-rag/internal/rag_core/parser"
@@ -73,7 +74,11 @@ func (l *DocumentIndexLogic) Consume(_ context.Context, key, val string) (err er
 	}
 
 	logx.Infof("[DocIndex] 开始处理文档索引: DocumentId=%s", msg.DocumentId)
-	return l.processDocument(l.ctx, msg)
+
+	// 使用本地消息表包装业务逻辑，实现分布式一致性
+	return l.svcCtx.LocalMsgExecutor.Execute(l.ctx, local_message.TaskTypeDocumentIndex, msg.KnowledgeDocumentIndexMsg, func(ctx context.Context) error {
+		return l.processDocument(ctx, msg)
+	})
 }
 
 // ========================================

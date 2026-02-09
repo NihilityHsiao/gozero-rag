@@ -18,11 +18,11 @@ import (
 	"gozero-rag/internal/model/user"
 	"gozero-rag/internal/model/user_api"
 	"gozero-rag/internal/model/user_tenant"
+	"gozero-rag/internal/mq"
 
 	"gozero-rag/internal/oss"
 	"gozero-rag/internal/rag_core/retriever"
 	"gozero-rag/restful/rag/internal/config"
-	"gozero-rag/restful/rag/internal/mq"
 
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -112,7 +112,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	svc := &ServiceContext{
 		Config: c,
 
-		MqPusherClient:  mq.NewKafka(kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)),
+		MqPusherClient:  mq.NewKafka(kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic), c.KqPusherConf.Topic),
 		RedisClient:     rdb,
 		OssClient:       ossClient,
 		UserModel:       user.NewUserModel(sqlConn, c.Cache),

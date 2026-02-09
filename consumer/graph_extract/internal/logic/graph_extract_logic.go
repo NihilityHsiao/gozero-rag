@@ -5,18 +5,18 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"gozero-rag/internal/tools/llmx"
 	"time"
 
 	openaiemb "github.com/cloudwego/eino-ext/components/embedding/openai"
+	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"gozero-rag/consumer/graph_extract/internal/svc"
 	"gozero-rag/internal/graphrag/types"
 	"gozero-rag/internal/model/graph"
+	"gozero-rag/internal/model/local_message"
 	"gozero-rag/internal/mq"
-
-	"github.com/cloudwego/eino-ext/components/model/openai"
-	"github.com/zeromicro/go-zero/core/logx"
+	"gozero-rag/internal/tools/llmx"
 )
 
 type GraphExtractLogic struct {
@@ -39,11 +39,20 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 		logx.Errorf("unmarshal graph generate msg failed: %v", err)
 		return nil // commit offset
 	}
+
+	// 使用本地消息表包装业务逻辑，实现分布式一致性
+	return l.svcCtx.LocalMsgExecutor.Execute(ctx, local_message.TaskTypeGraphExtract, msg, func(ctx context.Context) error {
+		return l.processGraphExtract(ctx, &msg)
+	})
+}
+
+// processGraphExtract 图谱提取核心逻辑
+func (l *GraphExtractLogic) processGraphExtract(ctx context.Context, msg *mq.GraphGenerateMsg) error {
 	// get embedding config
 	kb, err := l.svcCtx.KnowledgeBaseModel.FindOne(ctx, msg.KnowledgeBaseId)
 	if err != nil {
 		logx.Errorf("find knowledge base failed: %v", err)
-		return nil
+		return err
 	}
 
 	embModelName, embFactory := llmx.GetModelNameFactory(kb.EmbdId)
@@ -53,13 +62,13 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 	tenantLlm, err := l.svcCtx.TenantLlmModel.FindByTenantFactoryName(ctx, msg.TenantId, factory, llmModelName)
 	if err != nil {
 		logx.Errorf("find tenant llm failed: %v", err)
-		return nil // Should we retry? For now, commit if configuration error
+		return err
 	}
 
 	tenantEmb, err := l.svcCtx.TenantLlmModel.FindByTenantFactoryName(ctx, msg.TenantId, embFactory, embModelName)
 	if err != nil {
 		logx.Errorf("find tenant embedding failed: %v", err)
-		return nil
+		return err
 	}
 
 	embDim := 1024 // 后期做成可配置的
@@ -73,20 +82,17 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 		return err
 	}
 	// 2. Initialize Chat Model
-	// Assuming OpenAI compatible interface for now as per project standard
 	llm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		APIKey:  tenantLlm.ApiKey.String,
 		BaseURL: tenantLlm.ApiBase.String,
-		Model:   tenantLlm.LlmName, // or tenantLlm.ModelType depending on implementation, usually specific model name
+		Model:   tenantLlm.LlmName,
 	})
 	if err != nil {
 		logx.Errorf("init chat model failed: %v", err)
-		return err // Retryable error?
+		return err
 	}
 
-	// 3. Get Chunks (Pagination loop)
-	// TODO: Handle large document pagination properly
-	// For now, fetch first 1000 chunks. If document is larger, implementation needs update.
+	// 3. Get Chunks
 	chunkResult, err := l.svcCtx.ChunkModel.ListByDocId(ctx, msg.DocumentId, "", 1, 1000)
 	if err != nil {
 		logx.Errorf("list chunks failed: %v", err)
@@ -109,18 +115,16 @@ func (l *GraphExtractLogic) Consume(ctx context.Context, key, value string) erro
 
 	// 4.2 对entity做embedding
 	if len(extractResult.Entities) > 0 {
-
 		logx.Infof("开始生成实体embedding, 实体数: %d", len(extractResult.Entities))
 
 		for i, e := range extractResult.Entities {
-			embVector, err := embedder.EmbedStrings(l.ctx, []string{e.Name})
+			embVector, err := embedder.EmbedStrings(ctx, []string{e.Name})
 			if err != nil {
 				logx.Errorf("实体 [%s] 向量化失败, err:%v", e.Name, err)
+				continue
 			}
-
 			extractResult.Entities[i].Embedding = embVector[0]
 		}
-
 	}
 
 	// 5. Save to NebulaGraph

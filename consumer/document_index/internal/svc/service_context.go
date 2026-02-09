@@ -2,22 +2,23 @@ package svc
 
 import (
 	"context"
+	"gozero-rag/internal/mq"
+
 	"github.com/zeromicro/go-queue/kq"
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
+
 	"gozero-rag/consumer/document_index/internal/config"
-	"gozero-rag/consumer/document_index/internal/mq"
 	"gozero-rag/internal/model/chunk"
 	"gozero-rag/internal/model/knowledge"
 	"gozero-rag/internal/model/knowledge_base"
 	"gozero-rag/internal/model/knowledge_document"
+	"gozero-rag/internal/model/local_message"
 	"gozero-rag/internal/model/tenant_llm"
 	"gozero-rag/internal/model/user_api"
 	"gozero-rag/internal/oss"
 	"gozero-rag/internal/rag_core/doc_processor"
 	vectorstore "gozero-rag/internal/vector_store"
-
-	"github.com/zeromicro/go-zero/core/logx"
-
-	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 type ServiceContext struct {
@@ -36,7 +37,8 @@ type ServiceContext struct {
 
 	DocProcessService *doc_processor.ProcessorService
 
-	TenantLlmModel tenant_llm.TenantLlmModel
+	TenantLlmModel   tenant_llm.TenantLlmModel
+	LocalMsgExecutor *local_message.Executor
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -72,7 +74,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Config:         c,
 		SqlConn:        sqlConn,
 		OssClient:      ossClient,
-		MqPusherClient: mq.NewKafka(kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)),
+		MqPusherClient: mq.NewKafka(kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic), c.KqPusherConf.Topic),
 
 		// VectorClient:                vectorClient,
 		KnowledgeBaseModel:          knowledge_base.NewKnowledgeBaseModel(sqlConn, c.Cache),
@@ -83,6 +85,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		UserApiModel:      user_api.NewUserApiModel(sqlConn, c.Cache),
 		DocProcessService: docProcessService,
 
-		TenantLlmModel: tenant_llm.NewTenantLlmModel(sqlConn, c.Cache),
+		TenantLlmModel:   tenant_llm.NewTenantLlmModel(sqlConn, c.Cache),
+		LocalMsgExecutor: local_message.NewExecutor(local_message.NewLocalMessageModel(sqlConn)),
 	}
 }

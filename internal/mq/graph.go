@@ -12,4 +12,17 @@ type GraphGenerateMsg struct {
 	EntityTypes            []string `json:"entity_types"`
 	EnableEntityResolution bool     `json:"enable_entity_resolution"`
 	EnableCommunity        bool     `json:"enable_community"`
+
+	// 本地消息表补偿字段
+	LocalMessageId uint64 `json:"local_message_id,omitempty"` // 补偿投递时设置
+}
+
+// GetLocalMessageId 实现 RetryableMsg 接口
+func (m *GraphGenerateMsg) GetLocalMessageId() uint64 {
+	return m.LocalMessageId
+}
+
+// SetLocalMessageId 设置本地消息 ID
+func (m *GraphGenerateMsg) SetLocalMessageId(id uint64) {
+	m.LocalMessageId = id
 }
