@@ -31,4 +31,3 @@ fe/*.local
 *.njsproj
 *.sln
 *.sw?
-/.agent/
