@@ -2,6 +2,7 @@
 .env
 .qoder
 .vscode
+.doc
 .DS_Store
 /restful/rag/uploads/
 /prompts
