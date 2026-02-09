@@ -25,6 +25,7 @@ import (
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/schema"
 	"github.com/zeromicro/go-zero/core/logx"
+	"golang.org/x/sync/errgroup"
 )
 
 // ========================================
@@ -357,21 +358,38 @@ func (l *DocumentIndexLogic) buildLlmConfig(ic *indexContext) types.ProcessLlmCo
 // ========================================
 
 func (l *DocumentIndexLogic) buildChunksWithEmbedding(ctx context.Context, ic *indexContext, chunks []*schema.Document) ([]*chunk.Chunk, int64, error) {
+	var (
+		contentChunks []*chunk.Chunk
+		qaChunks      []*chunk.Chunk
+		totalTokenNum int64
+		contentErr    error
+		qaErr         error
+	)
 
-	// 构建普通 Chunks
-	saveChunks, totalTokenNum, err := l.buildContentChunks(ctx, ic, chunks)
-	if err != nil {
-		logx.Errorf("build content chunks err: %v", err)
+	// 并行构建 Content Chunks 和 QA Chunks
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		contentChunks, totalTokenNum, contentErr = l.buildContentChunks(gCtx, ic, chunks)
+		return contentErr
+	})
+
+	g.Go(func() error {
+		qaChunks, qaErr = l.buildQAChunks(gCtx, ic, chunks)
+		// QA 是可选的降级场景，失败不阻断主流程
+		if qaErr != nil {
+			logx.Errorf("build qa chunks error: %v", qaErr)
+		}
+		return nil // 始终返回 nil，不阻断
+	})
+
+	if err := g.Wait(); err != nil {
 		return nil, 0, fmt.Errorf("构建 Chunk 失败: %w", err)
 	}
 
-	// 构建 QA Chunks
-	qaChunks, err := l.buildQAChunks(ctx, ic, chunks)
-	if err == nil {
+	saveChunks := contentChunks
+	if len(qaChunks) > 0 {
 		saveChunks = append(saveChunks, qaChunks...)
-	} else {
-		// qa是可选的降级场景，不影响主流程
-		logx.Errorf("build qa chunks error: %v", err)
 	}
 
 	return saveChunks, totalTokenNum, nil
@@ -424,44 +442,67 @@ func (l *DocumentIndexLogic) buildContentChunks(ctx context.Context, ic *indexCo
 }
 
 func (l *DocumentIndexLogic) buildQAChunks(ctx context.Context, ic *indexContext, docs []*schema.Document) ([]*chunk.Chunk, error) {
-	var qaChunks []*chunk.Chunk
-	now := float64(time.Now().Unix())
+	// Step 1: 收集所有 QA 对
+	type qaWithMeta struct {
+		qa       types.QAItem
+		question string
+	}
+	var allQAs []qaWithMeta
 
-	// 每个doc代表一个chunk
 	for _, doc := range docs {
 		qaPairs, ok := doc.MetaData["qa_pairs"].([]types.QAItem)
 		if !ok || len(qaPairs) == 0 {
 			continue
 		}
+		for _, qa := range qaPairs {
+			allQAs = append(allQAs, qaWithMeta{qa: qa, question: qa.Question})
+		}
+	}
 
-		// 提取问题列表
-		questions := slicex.Into(qaPairs, func(qa types.QAItem) string {
-			return qa.Question
+	if len(allQAs) == 0 {
+		return nil, nil
+	}
+
+	// Step 2: 提取所有问题
+	questions := slicex.Into(allQAs, func(q qaWithMeta) string {
+		return q.question
+	})
+
+	// Step 3: 一次性并发批量生成所有 QA 向量
+	qaVectors, err := concurrentx.ParallelProcessOrdered(ctx, questions, concurrentx.ParallelProcessConfig{
+		BatchSize: batchSize,
+		Workers:   workers,
+		Timeout:   60 * time.Second,
+	}, func(ctx context.Context, batch []string) ([][]float64, error) {
+		return ic.embedder.EmbedStrings(ctx, batch)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("QA 向量生成失败: %w", err)
+	}
+
+	if len(qaVectors) != len(allQAs) {
+		return nil, fmt.Errorf("QA 向量数量(%d)与 QA 对数量(%d)不一致", len(qaVectors), len(allQAs))
+	}
+
+	// Step 4: 构建 QA Chunks
+	now := float64(time.Now().Unix())
+	qaChunks := make([]*chunk.Chunk, 0, len(allQAs))
+
+	for i, qaMeta := range allQAs {
+		qa := qaMeta.qa
+		qaId := l.generateChunkId("qa", qa.Question+qa.Answer, ic.msg.DocumentId)
+		qaContent := fmt.Sprintf("Question: %s\nAnswer: %s", qa.Question, qa.Answer)
+
+		qaChunks = append(qaChunks, &chunk.Chunk{
+			Id:            qaId,
+			DocId:         ic.msg.DocumentId,
+			KbIds:         []string{ic.msg.KnowledgeBaseId},
+			Content:       qaContent,
+			ContentVector: qaVectors[i],
+			DocName:       ic.doc.DocName.String,
+			CreateTime:    now,
+			Available:     1,
 		})
-
-		// 批量生成 QA 向量
-		qaVectors, err := l.embedStringsBatched(ctx, ic, questions)
-		if err != nil {
-			logx.Errorf("[DocIndex] QA 向量生成失败: %v", err)
-			continue
-		}
-
-		// 构建 QA Chunks
-		for j, qa := range qaPairs {
-			qaId := l.generateChunkId("qa", qa.Question+qa.Answer, ic.msg.DocumentId)
-			qaContent := fmt.Sprintf("Question: %s\nAnswer: %s", qa.Question, qa.Answer)
-
-			qaChunks = append(qaChunks, &chunk.Chunk{
-				Id:            qaId,
-				DocId:         ic.msg.DocumentId,
-				KbIds:         []string{ic.msg.KnowledgeBaseId},
-				Content:       qaContent,
-				ContentVector: qaVectors[j],
-				DocName:       ic.doc.DocName.String,
-				CreateTime:    now,
-				Available:     1,
-			})
-		}
 	}
 
 	return qaChunks, nil
