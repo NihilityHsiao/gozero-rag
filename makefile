@@ -15,6 +15,7 @@ gen-model:
 	goctl model mysql ddl --src ./script/mysql/knowledge_base.sql --dir ./internal/model/knowledge_base --style go_zero -c --home ./tpl
 	goctl model mysql ddl --src ./script/mysql/knowledge_document.sql --dir ./internal/model/knowledge_document --style go_zero -c --home ./tpl
 	goctl model mysql ddl --src ./script/mysql/task.sql --dir ./internal/model/task --style go_zero -c --home ./tpl
+	goctl model mysql ddl --src ./script/mysql/local_message.sql --dir ./internal/model/local_message --style go_zero
 	
 gen-api:
 	goctl api go --api ./restful/rag/rag.api --dir ./restful/rag --style go_zero
