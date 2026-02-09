@@ -1,16 +1,19 @@
 Name: compensator
 
 Mysql:
-  DataSource: ${MYSQL_DATA_SOURCE}
+  DataSource: "${MYSQL_USER}:${DB_PASSWORD}@tcp(${MYSQL_HOST}:${MYSQL_PORT})/${MYSQL_DATABASE}?charset=utf8mb4&parseTime=True&loc=Local"
 
 Cache:
-  - Host: ${REDIS_HOST}
+  - Host: ${REDIS_HOST}:${REDIS_PORT}
+    Pass: "${REDIS_PASSWORD}"
     Type: node
 
 KqPusherConf:
   Brokers:
-    - ${KAFKA_BROKER}
-  Name: ""
+    - ${KAFKA_BROKERS}
+  Topic: ""
+  Name: "compensator"
+  Group: compensator-group
 
 Compensator:
   Interval: 30      # 扫描间隔 (秒)
