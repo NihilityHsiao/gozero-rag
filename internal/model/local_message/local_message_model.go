@@ -94,7 +94,7 @@ func (m *customLocalMessageModel) UpdateFail(ctx context.Context, id uint64, rea
 			status = ?, 
 			fail_reason = ?,
 			next_retry_time = ?,
-			retry_times = retry_times + 1,
+			retry_times = retry_times + 1
 		WHERE id = ?
 	`, m.table)
 	_, err := m.conn.ExecCtx(ctx, query, StatusFail, reason, nextRetryTime, id)
