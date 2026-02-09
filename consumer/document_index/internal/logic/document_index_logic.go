@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gozero-rag/internal/concurrentx"
 	"os"
 	"path/filepath"
 	"time"
@@ -33,6 +34,9 @@ import (
 const (
 	defaultEmbeddingDim = 1024
 	tokenEstimateRatio  = 4 // 每 4 个字符约等于 1 个 token
+	// 并发批量生成向量
+	batchSize = 10 // 每批10个文本
+	workers   = 4  // 4个并发worker
 )
 
 // ========================================
@@ -352,44 +356,58 @@ func (l *DocumentIndexLogic) buildLlmConfig(ic *indexContext) types.ProcessLlmCo
 // Step 6: 向量生成与 Chunk 构建
 // ========================================
 
-func (l *DocumentIndexLogic) buildChunksWithEmbedding(ctx context.Context, ic *indexContext, docs []*schema.Document) ([]*chunk.Chunk, int64, error) {
-	// 提取文本内容
-	contents := slicex.Into(docs, func(d *schema.Document) string {
-		return d.Content
-	})
-
-	// 批量生成向量
-	vectors, err := l.embedStringsBatched(ctx, ic, contents)
-	if err != nil {
-		return nil, 0, fmt.Errorf("生成 Embedding 失败: %w", err)
-	}
-
-	if len(vectors) != len(docs) {
-		return nil, 0, fmt.Errorf("Embedding 数量(%d)与 Chunk 数量(%d)不一致", len(vectors), len(docs))
-	}
+func (l *DocumentIndexLogic) buildChunksWithEmbedding(ctx context.Context, ic *indexContext, chunks []*schema.Document) ([]*chunk.Chunk, int64, error) {
 
 	// 构建普通 Chunks
-	saveChunks, totalTokenNum := l.buildContentChunks(ic, docs, vectors)
+	saveChunks, totalTokenNum, err := l.buildContentChunks(ctx, ic, chunks)
+	if err != nil {
+		logx.Errorf("build content chunks err: %v", err)
+		return nil, 0, fmt.Errorf("构建 Chunk 失败: %w", err)
+	}
 
 	// 构建 QA Chunks
-	qaChunks := l.buildQAChunks(ctx, ic, docs)
-	saveChunks = append(saveChunks, qaChunks...)
+	qaChunks, err := l.buildQAChunks(ctx, ic, chunks)
+	if err == nil {
+		saveChunks = append(saveChunks, qaChunks...)
+	} else {
+		logx.Errorf("build qa chunks error: %v", err)
+	}
 
 	return saveChunks, totalTokenNum, nil
 }
 
-func (l *DocumentIndexLogic) buildContentChunks(ic *indexContext, docs []*schema.Document, vectors [][]float64) ([]*chunk.Chunk, int64) {
-	chunks := make([]*chunk.Chunk, 0, len(docs))
+func (l *DocumentIndexLogic) buildContentChunks(ctx context.Context, ic *indexContext, chunks []*schema.Document) ([]*chunk.Chunk, int64, error) {
+
+	// 批量生成向量
+	vectors, err := concurrentx.ParallelProcessOrdered(ctx, chunks, concurrentx.ParallelProcessConfig{
+		BatchSize: batchSize,
+		Workers:   workers,
+		Timeout:   60 * time.Second,
+	}, func(ctx context.Context, batch []*schema.Document) ([][]float64, error) {
+		contents := slicex.Into(batch, func(d *schema.Document) string {
+			return d.Content
+		})
+		return ic.embedder.EmbedStrings(ctx, contents)
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("生成 Embedding 失败: %w", err)
+	}
+
+	if len(vectors) != len(chunks) {
+		return nil, 0, fmt.Errorf("embedding 数量(%d)与 Chunk 数量(%d)不一致", len(vectors), len(chunks))
+	}
+
+	saveChunks := make([]*chunk.Chunk, 0, len(chunks))
 	var totalTokenNum int64
 
 	now := float64(time.Now().Unix())
 
-	for i, doc := range docs {
+	for i, doc := range chunks {
 		chunkId := l.generateChunkId("chunk", doc.Content, ic.msg.DocumentId)
 		tokenNum := int64(len(doc.Content) / tokenEstimateRatio)
 		totalTokenNum += tokenNum
 
-		chunks = append(chunks, &chunk.Chunk{
+		saveChunks = append(saveChunks, &chunk.Chunk{
 			Id:            chunkId,
 			DocId:         ic.msg.DocumentId,
 			KbIds:         []string{ic.msg.KnowledgeBaseId},
@@ -401,13 +419,14 @@ func (l *DocumentIndexLogic) buildContentChunks(ic *indexContext, docs []*schema
 		})
 	}
 
-	return chunks, totalTokenNum
+	return saveChunks, totalTokenNum, nil
 }
 
-func (l *DocumentIndexLogic) buildQAChunks(ctx context.Context, ic *indexContext, docs []*schema.Document) []*chunk.Chunk {
+func (l *DocumentIndexLogic) buildQAChunks(ctx context.Context, ic *indexContext, docs []*schema.Document) ([]*chunk.Chunk, error) {
 	var qaChunks []*chunk.Chunk
 	now := float64(time.Now().Unix())
 
+	// 每个doc代表一个chunk
 	for _, doc := range docs {
 		qaPairs, ok := doc.MetaData["qa_pairs"].([]types.QAItem)
 		if !ok || len(qaPairs) == 0 {
@@ -444,7 +463,7 @@ func (l *DocumentIndexLogic) buildQAChunks(ctx context.Context, ic *indexContext
 		}
 	}
 
-	return qaChunks
+	return qaChunks, nil
 }
 
 // ========================================
