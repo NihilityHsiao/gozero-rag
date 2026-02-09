@@ -370,6 +370,7 @@ func (l *DocumentIndexLogic) buildChunksWithEmbedding(ctx context.Context, ic *i
 	if err == nil {
 		saveChunks = append(saveChunks, qaChunks...)
 	} else {
+		// qa是可选的降级场景，不影响主流程
 		logx.Errorf("build qa chunks error: %v", err)
 	}
 
@@ -533,7 +534,6 @@ func (l *DocumentIndexLogic) recordSuccessMetrics(ic *indexContext, totalChunks,
 
 // embedStringsBatched 分批生成向量，避免 413 Payload Too Large
 func (l *DocumentIndexLogic) embedStringsBatched(ctx context.Context, ic *indexContext, texts []string) ([][]float64, error) {
-	const batchSize = 10 // 每次请求最多处理 10 个文本
 	var allVectors [][]float64
 
 	for i := 0; i < len(texts); i += batchSize {
